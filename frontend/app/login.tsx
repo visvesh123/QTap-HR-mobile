@@ -78,7 +78,7 @@ export default function Login() {
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="you@univ.edu"
+                placeholder="you@mahindrauniversity.edu.in"
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
                 keyboardType="email-address"

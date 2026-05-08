@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { colors, radii, shadow, spacing } from '../src/theme';
+import { colors, radii, shadow, spacing, BRAND } from '../src/theme';
 
 const ROLES = [
   {
@@ -13,7 +13,7 @@ const ROLES = [
     icon: 'school',
     iconLib: 'mci' as const,
     description: 'Hall tickets, library, hostel, events, wallet & more',
-    gradient: [colors.primaryDark, colors.primaryLight] as [string, string],
+    gradient: ['#B71429', '#E31837'] as [string, string],
   },
   {
     key: 'staff',
@@ -21,7 +21,7 @@ const ROLES = [
     icon: 'account-tie',
     iconLib: 'mci' as const,
     description: 'Faculty, Librarian, Warden, Security, Exam Cell',
-    gradient: ['#0EA5E9', '#3B82F6'] as [string, string],
+    gradient: ['#1F2937', '#374151'] as [string, string],
   },
   {
     key: 'admin',
@@ -29,7 +29,7 @@ const ROLES = [
     icon: 'shield-crown',
     iconLib: 'mci' as const,
     description: 'University-wide oversight, analytics & operations',
-    gradient: ['#F59E0B', '#EF4444'] as [string, string],
+    gradient: ['#92400E', '#D4A017'] as [string, string],
   },
 ];
 
@@ -41,11 +41,11 @@ export default function RoleSelect() {
       <ScrollView contentContainerStyle={{ paddingBottom: spacing.xl }}>
         <View style={styles.header}>
           <View style={styles.logoBadge}>
-            <MaterialCommunityIcons name="school" size={28} color={colors.primary} />
+            <Text style={styles.logoLetter}>M</Text>
           </View>
-          <Text style={styles.brand}>Campus Hub</Text>
+          <Text style={styles.brand}>{BRAND.name.toUpperCase()}</Text>
           <Text style={styles.welcome}>Welcome 👋</Text>
-          <Text style={styles.tagline}>Sign in as</Text>
+          <Text style={styles.tagline}>Sign in to continue as</Text>
         </View>
 
         <View style={{ paddingHorizontal: spacing.md }}>
@@ -96,12 +96,13 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
   },
   logoBadge: {
-    width: 56, height: 56, borderRadius: 16,
-    backgroundColor: colors.primaryBg,
+    width: 64, height: 64, borderRadius: 18,
+    backgroundColor: colors.primary,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: spacing.md,
   },
-  brand: { fontSize: 14, fontWeight: '700', color: colors.primary, letterSpacing: 1.5 },
+  logoLetter: { fontSize: 38, fontWeight: '900', color: colors.white, letterSpacing: -1, marginTop: -4 },
+  brand: { fontSize: 13, fontWeight: '800', color: colors.primary, letterSpacing: 2 },
   welcome: { fontSize: 32, fontWeight: '800', color: colors.text, marginTop: spacing.sm, letterSpacing: -0.5 },
   tagline: { fontSize: 16, color: colors.textSecondary, marginTop: spacing.xs },
   cardWrap: {

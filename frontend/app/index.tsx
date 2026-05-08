@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/auth';
-import { colors } from '../src/theme';
+import { colors, BRAND } from '../src/theme';
 
 export default function Index() {
   const router = useRouter();
@@ -25,10 +25,11 @@ export default function Index() {
       style={styles.container}
     >
       <View style={styles.logo} testID="splash-logo">
-        <MaterialCommunityIcons name="school" size={56} color={colors.white} />
+        <Text style={styles.logoLetter}>M</Text>
       </View>
+      <Text style={styles.kicker}>{BRAND.name.toUpperCase()}</Text>
       <Text style={styles.title}>Campus Hub</Text>
-      <Text style={styles.subtitle}>One app for every campus moment</Text>
+      <Text style={styles.subtitle}>{BRAND.tagline}</Text>
       <ActivityIndicator color={colors.white} style={{ marginTop: 32 }} />
     </LinearGradient>
   );
@@ -37,11 +38,13 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   logo: {
-    width: 96, height: 96, borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    width: 110, height: 110, borderRadius: 28,
+    backgroundColor: colors.white,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: 20,
   },
-  title: { fontSize: 32, fontWeight: '800', color: colors.white, letterSpacing: -0.5 },
-  subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.85)', marginTop: 6 },
+  logoLetter: { fontSize: 64, fontWeight: '900', color: colors.primary, letterSpacing: -2, marginTop: -6 },
+  kicker: { fontSize: 12, fontWeight: '800', color: 'rgba(255,255,255,0.95)', letterSpacing: 3 },
+  title: { fontSize: 36, fontWeight: '800', color: colors.white, letterSpacing: -0.5, marginTop: 4 },
+  subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.85)', marginTop: 6, fontStyle: 'italic' },
 });

@@ -127,14 +127,14 @@ class CommunicationOut(BaseModel):
 
 # ---------- Seeders ----------
 SEED_USERS = [
-    {"email": "student@univ.edu", "password": "student123", "name": "Aarav Sharma", "role": "student", "department": "Computer Science", "student_id": "CS2023001"},
-    {"email": "student2@univ.edu", "password": "student123", "name": "Diya Patel", "role": "student", "department": "Mechanical", "student_id": "ME2023045"},
-    {"email": "faculty@univ.edu", "password": "faculty123", "name": "Dr. Rajesh Kumar", "role": "staff", "department": "Faculty - Computer Science", "employee_id": "FAC1023"},
-    {"email": "librarian@univ.edu", "password": "librarian123", "name": "Mrs. Anita Nair", "role": "staff", "department": "Library", "employee_id": "LIB204"},
-    {"email": "warden@univ.edu", "password": "warden123", "name": "Mr. Vikram Singh", "role": "staff", "department": "Hostel", "employee_id": "HOS101"},
-    {"email": "security@univ.edu", "password": "security123", "name": "Mr. Ramesh Kale", "role": "staff", "department": "Security", "employee_id": "SEC011"},
-    {"email": "exam@univ.edu", "password": "exam123", "name": "Dr. Kavita Joshi", "role": "staff", "department": "Examination Cell", "employee_id": "EXM002"},
-    {"email": "admin@univ.edu", "password": "admin123", "name": "Prof. Suresh Mehta", "role": "admin", "department": "Administration", "employee_id": "ADM001"},
+    {"email": "student@mahindrauniversity.edu.in", "password": "student123", "name": "Aarav Sharma", "role": "student", "department": "Computer Science", "student_id": "MU23BTECS001"},
+    {"email": "student2@mahindrauniversity.edu.in", "password": "student123", "name": "Diya Patel", "role": "student", "department": "Mechanical", "student_id": "MU23BTEME045"},
+    {"email": "faculty@mahindrauniversity.edu.in", "password": "faculty123", "name": "Dr. Rajesh Kumar", "role": "staff", "department": "Faculty - Computer Science", "employee_id": "MU-FAC1023"},
+    {"email": "librarian@mahindrauniversity.edu.in", "password": "librarian123", "name": "Mrs. Anita Nair", "role": "staff", "department": "Library", "employee_id": "MU-LIB204"},
+    {"email": "warden@mahindrauniversity.edu.in", "password": "warden123", "name": "Mr. Vikram Singh", "role": "staff", "department": "Hostel", "employee_id": "MU-HOS101"},
+    {"email": "security@mahindrauniversity.edu.in", "password": "security123", "name": "Mr. Ramesh Kale", "role": "staff", "department": "Security", "employee_id": "MU-SEC011"},
+    {"email": "exam@mahindrauniversity.edu.in", "password": "exam123", "name": "Dr. Kavita Joshi", "role": "staff", "department": "Examination Cell", "employee_id": "MU-EXM002"},
+    {"email": "admin@mahindrauniversity.edu.in", "password": "admin123", "name": "Prof. Suresh Mehta", "role": "admin", "department": "Administration", "employee_id": "MU-ADM001"},
 ]
 
 SEED_EVENTS = [
@@ -248,13 +248,13 @@ async def me(user: dict = Depends(get_current_user)):
 @api.get("/auth/demo-accounts")
 async def demo_accounts():
     return [
-        {"role": "student", "email": "student@univ.edu", "password": "student123", "name": "Aarav Sharma"},
-        {"role": "staff", "email": "faculty@univ.edu", "password": "faculty123", "name": "Dr. Rajesh Kumar (Faculty)"},
-        {"role": "staff", "email": "librarian@univ.edu", "password": "librarian123", "name": "Mrs. Anita Nair (Librarian)"},
-        {"role": "staff", "email": "warden@univ.edu", "password": "warden123", "name": "Mr. Vikram Singh (Warden)"},
-        {"role": "staff", "email": "security@univ.edu", "password": "security123", "name": "Mr. Ramesh Kale (Security)"},
-        {"role": "staff", "email": "exam@univ.edu", "password": "exam123", "name": "Dr. Kavita Joshi (Exam Cell)"},
-        {"role": "admin", "email": "admin@univ.edu", "password": "admin123", "name": "Prof. Suresh Mehta"},
+        {"role": "student", "email": "student@mahindrauniversity.edu.in", "password": "student123", "name": "Aarav Sharma"},
+        {"role": "staff", "email": "faculty@mahindrauniversity.edu.in", "password": "faculty123", "name": "Dr. Rajesh Kumar (Faculty)"},
+        {"role": "staff", "email": "librarian@mahindrauniversity.edu.in", "password": "librarian123", "name": "Mrs. Anita Nair (Librarian)"},
+        {"role": "staff", "email": "warden@mahindrauniversity.edu.in", "password": "warden123", "name": "Mr. Vikram Singh (Warden)"},
+        {"role": "staff", "email": "security@mahindrauniversity.edu.in", "password": "security123", "name": "Mr. Ramesh Kale (Security)"},
+        {"role": "staff", "email": "exam@mahindrauniversity.edu.in", "password": "exam123", "name": "Dr. Kavita Joshi (Exam Cell)"},
+        {"role": "admin", "email": "admin@mahindrauniversity.edu.in", "password": "admin123", "name": "Prof. Suresh Mehta"},
     ]
 
 # ---------- EXAMINATIONS ----------

@@ -53,7 +53,7 @@ export default function Home() {
         >
           <View style={styles.topRow}>
             <View>
-              <Text style={styles.brandSmall}>CAMPUS HUB</Text>
+              <Text style={styles.brandSmall}>MAHINDRA UNIVERSITY</Text>
               <Text style={styles.brandTitle}>{user.role === 'admin' ? 'University Console' : "Today's Campus"}</Text>
             </View>
             <View style={{ flexDirection: 'row', gap: 10 }}>
