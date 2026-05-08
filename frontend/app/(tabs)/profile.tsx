@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,17 +11,24 @@ import { Card, Badge } from '../../src/ui';
 export default function Profile() {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   if (!user) return null;
 
-  const onLogout = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out', style: 'destructive',
-        onPress: async () => { await logout(); router.replace('/role-select'); },
-      },
-    ]);
+  const performSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await logout();
+    } catch (e) {
+      console.warn('logout error', e);
+    } finally {
+      setConfirmOpen(false);
+      setSigningOut(false);
+    }
+    router.replace('/role-select');
   };
+
+  const onLogout = () => setConfirmOpen(true);
 
   const initials = user.name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
   const idLabel = user.role === 'student' ? user.student_id : user.employee_id;
@@ -86,6 +93,42 @@ export default function Profile() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={confirmOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconWrap}>
+              <Ionicons name="log-out-outline" size={28} color={colors.sos} />
+            </View>
+            <Text style={styles.modalTitle}>Sign out?</Text>
+            <Text style={styles.modalSub}>You'll need to sign in again to access Campus Hub.</Text>
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                onPress={() => setConfirmOpen(false)}
+                style={[styles.modalBtn, styles.modalBtnCancel]}
+                testID="logout-cancel"
+              >
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={performSignOut}
+                disabled={signingOut}
+                style={[styles.modalBtn, styles.modalBtnConfirm]}
+                testID="logout-confirm"
+              >
+                <Text style={styles.modalBtnConfirmText}>
+                  {signingOut ? 'Signing out…' : 'Sign Out'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -125,4 +168,48 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE2E2', borderRadius: radii.md, padding: spacing.md, marginTop: spacing.md,
   },
   logoutText: { color: colors.sos, fontWeight: '700', fontSize: 15 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    padding: spacing.lg,
+    alignItems: 'center',
+    ...shadow.cardHeavy,
+  },
+  modalIconWrap: {
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  modalTitle: { fontSize: 19, fontWeight: '800', color: colors.text },
+  modalSub: {
+    fontSize: 13, color: colors.textSecondary,
+    marginTop: 6, textAlign: 'center', lineHeight: 18,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    width: '100%',
+  },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnCancel: { backgroundColor: '#F1F5F9' },
+  modalBtnCancelText: { color: colors.text, fontWeight: '700', fontSize: 14 },
+  modalBtnConfirm: { backgroundColor: colors.sos },
+  modalBtnConfirmText: { color: colors.white, fontWeight: '700', fontSize: 14 },
 });
