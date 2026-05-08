@@ -6,9 +6,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/auth';
 import { api } from '../../src/api';
-import { colors, radii, shadow, spacing, typo } from '../../src/theme';
+import { colors, radii, shadow, spacing, typo, BRAND } from '../../src/theme';
 import { ServiceTile, SectionHeader, Card } from '../../src/ui';
 import { SECTIONED_SERVICES } from '../../src/services-catalog';
+import MessLiveCard from '../../src/components/MessLiveCard';
 
 export default function Home() {
   const router = useRouter();
@@ -52,9 +53,14 @@ export default function Home() {
           style={styles.topBar}
         >
           <View style={styles.topRow}>
-            <View>
-              <Text style={styles.brandSmall}>MAHINDRA UNIVERSITY</Text>
-              <Text style={styles.brandTitle}>{user.role === 'admin' ? 'University Console' : "Today's Campus"}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={styles.headerLogoBadge}>
+                <Image source={{ uri: BRAND.logoUrl }} style={styles.headerLogo} resizeMode="contain" />
+              </View>
+              <View>
+                <Text style={styles.brandSmall}>MAHINDRA UNIVERSITY</Text>
+                <Text style={styles.brandTitle}>{user.role === 'admin' ? 'University Console' : "Today's Campus"}</Text>
+              </View>
             </View>
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <TouchableOpacity
@@ -174,6 +180,9 @@ export default function Home() {
           </LinearGradient>
         </TouchableOpacity>
 
+        {/* Mess live capacity */}
+        <MessLiveCard />
+
         {/* Sectioned services */}
         {sections.map((section) => (
           <View key={section.title}>
@@ -226,6 +235,12 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 28, borderBottomRightRadius: 28,
   },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerLogoBadge: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: colors.white,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  headerLogo: { width: 26, height: 26 },
   brandSmall: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.85)', letterSpacing: 2 },
   brandTitle: { fontSize: 18, fontWeight: '700', color: colors.white, marginTop: 2 },
   iconBtn: {

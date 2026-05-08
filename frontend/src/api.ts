@@ -92,4 +92,7 @@ export const api = {
 
   // admin
   adminDashboard: () => request<any>('GET', '/admin/dashboard'),
+
+  // mess
+  messList: (demo?: string) => request<any>('GET', `/mess/list${demo ? `?demo=${demo}` : ''}`),
 };

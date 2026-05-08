@@ -20,6 +20,7 @@ export const ALL_SERVICES: ServiceItem[] = [
 
   // Campus Life
   { key: 'hostel', label: 'Hostel', icon: 'bed-outline', iconLib: 'ion', color: '#F59E0B', route: '/modules/hostel', roles: ['student', 'staff', 'admin'] },
+  { key: 'mess', label: 'Mess', icon: 'silverware-fork-knife', iconLib: 'mci', color: '#16A34A', route: '/modules/mess', roles: ['student', 'staff', 'admin'] },
   { key: 'events', label: 'Events', icon: 'ticket-confirmation-outline', iconLib: 'mci', color: '#EC4899', route: '/modules/events', roles: ['student', 'staff', 'admin'] },
   { key: 'certificates', label: 'Certificates', icon: 'certificate-outline', iconLib: 'mci', color: '#8B5CF6', route: '/modules/certificates', roles: ['student'] },
 
@@ -54,7 +55,7 @@ export const SECTIONED_SERVICES = (role: string, department?: string) => {
   const inSection = (keys: string[]) => all.filter((s) => keys.includes(s.key));
   return [
     { title: 'Academics', items: inSection(['examinations', 'library', 'results']) },
-    { title: 'Campus Life', items: inSection(['hostel', 'events', 'certificates']) },
+    { title: 'Campus Life', items: inSection(['hostel', 'mess', 'events', 'certificates']) },
     { title: 'Campus Services', items: inSection(['visitor', 'attendance', 'parcel', 'gate']) },
     { title: 'Communication', items: inSection(['alerts', 'sos']) },
     { title: 'Administration', items: inSection(['admin-panel', 'gate-logs']) },

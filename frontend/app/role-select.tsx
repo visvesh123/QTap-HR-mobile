@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,7 +41,7 @@ export default function RoleSelect() {
       <ScrollView contentContainerStyle={{ paddingBottom: spacing.xl }}>
         <View style={styles.header}>
           <View style={styles.logoBadge}>
-            <Text style={styles.logoLetter}>M</Text>
+            <Image source={{ uri: BRAND.logoUrl }} style={styles.muLogo} resizeMode="contain" />
           </View>
           <Text style={styles.brand}>{BRAND.name.toUpperCase()}</Text>
           <Text style={styles.welcome}>Welcome 👋</Text>
@@ -82,6 +82,11 @@ export default function RoleSelect() {
         <View style={styles.footer}>
           <Text style={styles.footerText}>By continuing, you agree to the University's</Text>
           <Text style={styles.footerLink}>Terms of Use & Privacy Policy</Text>
+          <View style={styles.poweredRow}>
+            <Text style={styles.poweredText}>Powered by</Text>
+            <Image source={{ uri: BRAND.poweredByLogoUrl }} style={styles.qtapLogo} resizeMode="contain" />
+          </View>
+          <Text style={styles.deptText}>{BRAND.poweredByDescription}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -96,11 +101,13 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
   },
   logoBadge: {
-    width: 64, height: 64, borderRadius: 18,
-    backgroundColor: colors.primary,
+    width: 72, height: 72, borderRadius: 18,
+    backgroundColor: colors.white,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: spacing.md,
+    borderWidth: 1, borderColor: colors.border,
   },
+  muLogo: { width: 50, height: 50 },
   logoLetter: { fontSize: 38, fontWeight: '900', color: colors.white, letterSpacing: -1, marginTop: -4 },
   brand: { fontSize: 13, fontWeight: '800', color: colors.primary, letterSpacing: 2 },
   welcome: { fontSize: 32, fontWeight: '800', color: colors.text, marginTop: spacing.sm, letterSpacing: -0.5 },
@@ -129,4 +136,14 @@ const styles = StyleSheet.create({
   },
   footerText: { fontSize: 12, color: colors.textSecondary },
   footerLink: { fontSize: 12, color: colors.primary, fontWeight: '600', marginTop: 2 },
+  poweredRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1, borderTopColor: colors.border,
+    width: '100%', justifyContent: 'center',
+  },
+  poweredText: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
+  qtapLogo: { width: 60, height: 20 },
+  deptText: { fontSize: 10, color: colors.textMuted, marginTop: 2 },
 });

@@ -604,6 +604,167 @@ async def admin_dashboard(user: dict = Depends(get_current_user)):
         "event_registrations": await db.event_registrations.count_documents({}),
     }
 
+# ---------- mess capacity (live simulated) ----------
+import math
+import random as _rand
+
+MESSES = [
+    {
+        "id": "mess_it",
+        "name": "IT Mess",
+        "location": "Behind IT Block, Phase-1",
+        "capacity": 280,
+        "distance_m": 120,
+        "hours": {"breakfast": "7:30 - 9:30 AM", "lunch": "12:30 - 2:30 PM", "snacks": "5:00 - 6:30 PM", "dinner": "7:30 - 9:30 PM"},
+        "menu": {
+            "breakfast": ["Idli & Sambar", "Mini Dosa", "Boiled Eggs", "Upma", "Tea / Coffee"],
+            "lunch": ["Veg Biryani", "Dal Tadka", "Aloo Gobi", "Curd Rice", "Salad", "Gulab Jamun"],
+            "snacks": ["Veg Puff", "Masala Chai", "Bhel Puri"],
+            "dinner": ["Roti", "Paneer Butter Masala", "Jeera Rice", "Mixed Veg", "Ice Cream"],
+        },
+    },
+    {
+        "id": "mess_dorms",
+        "name": "Dorms Mess",
+        "location": "Boys Hostel Complex, Block-C",
+        "capacity": 420,
+        "distance_m": 380,
+        "hours": {"breakfast": "7:00 - 9:30 AM", "lunch": "12:30 - 2:30 PM", "snacks": "5:00 - 6:30 PM", "dinner": "7:30 - 10:00 PM"},
+        "menu": {
+            "breakfast": ["Aloo Paratha", "Poha", "Omelette", "Cornflakes & Milk", "Tea / Coffee"],
+            "lunch": ["Chicken Curry", "Veg Pulao", "Dal Makhani", "Mixed Veg", "Roti", "Pickle"],
+            "snacks": ["Samosa", "Vada Pav", "Filter Coffee"],
+            "dinner": ["Butter Roti", "Egg Curry", "Steamed Rice", "Bhindi Fry", "Sweet Lassi"],
+        },
+    },
+    {
+        "id": "mess_phase2",
+        "name": "Phase-2 Mess",
+        "location": "Girls Hostel Complex, Phase-2",
+        "capacity": 320,
+        "distance_m": 540,
+        "hours": {"breakfast": "7:30 - 9:30 AM", "lunch": "12:30 - 2:30 PM", "snacks": "5:00 - 6:30 PM", "dinner": "7:30 - 9:30 PM"},
+        "menu": {
+            "breakfast": ["Masala Dosa", "Pongal", "Boiled Eggs", "Fruits", "Tea / Coffee"],
+            "lunch": ["Hyderabadi Biryani", "Dal Fry", "Bhindi Masala", "Raita", "Salad", "Kheer"],
+            "snacks": ["Pav Bhaji", "Cold Coffee", "Cookies"],
+            "dinner": ["Tandoori Roti", "Veg Kofta", "Steamed Rice", "Aloo Methi", "Gulab Jamun"],
+        },
+    },
+]
+
+
+def _current_meal(now: datetime) -> str:
+    h, m = now.hour, now.minute
+    t = h + m / 60.0
+    if 7.0 <= t < 9.75:
+        return "breakfast"
+    if 12.25 <= t < 14.75:
+        return "lunch"
+    if 17.0 <= t < 18.75:
+        return "snacks"
+    if 19.25 <= t < 22.0:
+        return "dinner"
+    return "closed"
+
+
+def _next_meal(now: datetime) -> str:
+    t = now.hour + now.minute / 60.0
+    if t < 7.0: return "breakfast"
+    if t < 12.25: return "lunch"
+    if t < 17.0: return "snacks"
+    if t < 19.25: return "dinner"
+    return "breakfast"  # next day
+
+
+def _peak_factor(now: datetime, mess_id: str) -> float:
+    """Returns 0..1 occupancy factor based on time-of-day with mess-specific bias."""
+    h = now.hour + now.minute / 60.0
+    # bell curves around meal peaks (height tuned so peak ~ 0.6-0.85 by mess)
+    peaks = [(8.25, 0.55), (13.25, 0.85), (17.75, 0.35), (20.25, 0.7)]
+    val = 0.04  # baseline (cleaning / staff)
+    for center, height in peaks:
+        sigma = 0.55
+        val += height * math.exp(-((h - center) ** 2) / (2 * sigma * sigma))
+    # mess-specific bias
+    bias = {"mess_it": 0.78, "mess_dorms": 1.1, "mess_phase2": 0.9}.get(mess_id, 1.0)
+    val = min(0.95, val * bias)
+    # add small jitter that changes every ~minute
+    seed = int(now.timestamp() // 60) + sum(ord(c) for c in mess_id)
+    rng = _rand.Random(seed)
+    val = max(0.0, min(0.97, val + rng.uniform(-0.06, 0.06)))
+    return val
+
+
+def _status_for(occ_pct: float, meal: str) -> dict:
+    if meal == "closed":
+        return {"label": "Closed", "color": "#94A3B8", "tone": "muted"}
+    if occ_pct < 30:
+        return {"label": "Almost Empty", "color": "#10B981", "tone": "good"}
+    if occ_pct < 60:
+        return {"label": "Comfortable", "color": "#22C55E", "tone": "good"}
+    if occ_pct < 80:
+        return {"label": "Crowded", "color": "#F59E0B", "tone": "warn"}
+    if occ_pct < 95:
+        return {"label": "Very Crowded", "color": "#EF4444", "tone": "bad"}
+    return {"label": "Packed — Wait", "color": "#B71429", "tone": "bad"}
+
+
+@api.get("/mess/list")
+async def mess_list(demo: Optional[str] = None):
+    """Returns live mess capacity. Pass ?demo=breakfast|lunch|snacks|dinner to force a meal preview."""
+    now = datetime.now()
+    forced_meal = demo if demo in ("breakfast", "lunch", "snacks", "dinner") else None
+    meal = forced_meal or _current_meal(now)
+    next_m = _next_meal(now)
+    out = []
+    for m in MESSES:
+        if meal == "closed":
+            current = int(round(m["capacity"] * 0.04))  # cleaning / staff present
+            occ_pct = round((current / m["capacity"]) * 100, 1)
+        else:
+            # If demo forced, simulate that meal's peak by shifting "now" to the peak hour
+            if forced_meal:
+                peak_centers = {"breakfast": 8.25, "lunch": 13.25, "snacks": 17.75, "dinner": 20.25}
+                fake = now.replace(hour=int(peak_centers[forced_meal]),
+                                   minute=int((peak_centers[forced_meal] % 1) * 60))
+                factor = _peak_factor(fake, m["id"])
+            else:
+                factor = _peak_factor(now, m["id"])
+            current = int(round(m["capacity"] * factor))
+            occ_pct = round((current / m["capacity"]) * 100, 1)
+        wait_minutes = 0
+        if occ_pct >= 95:
+            wait_minutes = 12
+        elif occ_pct >= 80:
+            wait_minutes = 6
+        elif occ_pct >= 60:
+            wait_minutes = 2
+        display_meal = meal if meal != "closed" else next_m
+        out.append({
+            **m,
+            "current": current,
+            "occupancy_pct": occ_pct,
+            "current_meal": meal,
+            "next_meal": next_m,
+            "display_meal": display_meal,
+            "today_menu": m["menu"].get(display_meal, []),
+            "next_meal_hours": m["hours"].get(next_m, ""),
+            "status": _status_for(occ_pct, meal),
+            "wait_minutes": wait_minutes,
+            "updated_at": now.isoformat() + "Z",
+        })
+    open_ones = [x for x in out if x["current_meal"] != "closed"]
+    if open_ones:
+        rec = min(open_ones, key=lambda x: x["occupancy_pct"])
+        for x in out:
+            x["recommended"] = (x["id"] == rec["id"])
+    else:
+        for x in out:
+            x["recommended"] = False
+    return {"meal": meal, "next_meal": next_m, "server_time": now.isoformat() + "Z", "messes": out}
+
+
 # ---------- mount ----------
 app.include_router(api)
 

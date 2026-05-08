@@ -72,4 +72,8 @@ export const BRAND = {
   short: 'MU',
   tagline: 'Rise. Lead. Inspire.',
   domain: 'mahindrauniversity.edu.in',
+  logoUrl: 'https://customer-assets.emergentagent.com/job_campus-hub-453/artifacts/79azl2xu_mu_logo%20%281%29.png',
+  poweredBy: 'Q-Tap',
+  poweredByLogoUrl: 'https://customer-assets.emergentagent.com/job_campus-hub-453/artifacts/6viavqwc_Q-Tap_logo.jpg',
+  poweredByDescription: 'Department of Campus Innovation',
 };
