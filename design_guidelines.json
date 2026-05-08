@@ -1,0 +1,135 @@
+{
+  "theme": "hybrid_fullstack",
+  "archetype": "Pastel & Soft / Jewel Hybrid (Adani One Style)",
+  "color_palette": {
+    "primary": {
+      "solid": "#7D3ECF",
+      "gradient": ["#6B2FB3", "#9B4FE0"],
+      "light": "#F3E8FF"
+    },
+    "secondary": "#FFFFFF",
+    "accent": {
+      "gold": "#F5A623",
+      "gold_light": "#FEF3C7"
+    },
+    "neutrals": {
+      "background": "#F9FAFB",
+      "surface": "#FFFFFF",
+      "text_main": "#111827",
+      "text_secondary": "#6B7280",
+      "border": "#E5E7EB"
+    },
+    "semantic": {
+      "sos": "#EF4444",
+      "success": "#10B981"
+    }
+  },
+  "typography": {
+    "font_family": "PlusJakartaSans",
+    "styles": {
+      "h1": { "size": 28, "weight": "700", "letterSpacing": -0.5 },
+      "h2": { "size": 24, "weight": "700", "letterSpacing": -0.5 },
+      "h3": { "size": 20, "weight": "600" },
+      "section_header": { "size": 13, "weight": "700", "textTransform": "uppercase", "letterSpacing": 1.2 },
+      "body": { "size": 16, "weight": "400" },
+      "caption": { "size": 12, "weight": "500" }
+    }
+  },
+  "spacing_system": {
+    "xs": 4,
+    "sm": 8,
+    "md": 16,
+    "lg": 24,
+    "xl": 32,
+    "xxl": 48
+  },
+  "component_patterns": {
+    "service_tile": {
+      "background": "#FFFFFF",
+      "borderRadius": 16,
+      "shadow": "subtle_elevation_2",
+      "icon_container": "Circle with background #F3E8FF",
+      "icon_color": "#7D3ECF",
+      "layout": "Column, centered icon and text"
+    },
+    "welcome_card": {
+      "background": "gradient from #6B2FB3 to #9B4FE0",
+      "borderRadius": 24,
+      "textColor": "#FFFFFF",
+      "padding": 24,
+      "layout": "Row with text on left and 3D illustration or large icon on right"
+    },
+    "whats_new_badge": {
+      "background": "#FEF3C7",
+      "textColor": "#F5A623",
+      "borderRadius": 999,
+      "padding": "4px 8px"
+    },
+    "bottom_tab_nav": {
+      "background": "#FFFFFF",
+      "active_color": "#7D3ECF",
+      "inactive_color": "#9CA3AF",
+      "borderTop": "1px solid #E5E7EB"
+    },
+    "tab_pills": {
+      "active": { "background": "#F3E8FF", "textColor": "#7D3ECF" },
+      "inactive": { "background": "transparent", "border": "1px solid #E5E7EB", "textColor": "#6B7280" }
+    },
+    "sos_button": {
+      "background": "#EF4444",
+      "textColor": "#FFFFFF",
+      "shape": "circle",
+      "animation": "pulse"
+    }
+  },
+  "layout_patterns": {
+    "login_screen": "Clean white background, university logo centered, Input fields with subtle border, solid primary color button.",
+    "role_select": "List of 3 large cards (Student, Staff, Admin). Cards have distinct icons and subtle drop shadows.",
+    "home_dashboard": "Scrollable View. Header (Logo, User info, What's New, Notification icon) -> Welcome Card -> Section Header (Academics) -> Grid of Service Tiles (3 or 4 columns) -> Promotional Banner -> Section Header (Campus Life) -> Grid.",
+    "module_screens": "Back button in header, Large title, Tab pills for sub-navigation, content mostly in cards.",
+    "sos_emergency": "Floating Action Button (FAB) anchored bottom-right or top-right in header across app except Auth screens."
+  },
+  "icon_recommendations": {
+    "library": "@expo/vector-icons (Ionicons & MaterialCommunityIcons)",
+    "mapping": {
+      "Examinations": "school-outline (Ionicons)",
+      "Visitor": "badge-account-horizontal-outline (MaterialCommunityIcons)",
+      "Staff Attendance": "map-marker-account-outline (MaterialCommunityIcons)",
+      "Library": "library-outline (Ionicons)",
+      "Hostel": "bed-outline (Ionicons)",
+      "Events": "ticket-confirmation-outline (MaterialCommunityIcons)",
+      "Communication": "bullhorn-outline (MaterialCommunityIcons)",
+      "Parcel": "package-variant-closed (MaterialCommunityIcons)",
+      "Wallet": "wallet-outline (Ionicons)",
+      "Gate Access": "gate-open (MaterialCommunityIcons)",
+      "SOS": "shield-alert-outline (MaterialCommunityIcons)"
+    }
+  },
+  "media": {
+    "promotional_banners": [
+      {
+        "url": "https://images.pexels.com/photos/32213218/pexels-photo-32213218.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "events_banner",
+        "description": "Happy university students socializing on campus, perfect for campus life banner."
+      },
+      {
+        "url": "https://images.pexels.com/photos/7972556/pexels-photo-7972556.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "campus_tour_banner",
+        "description": "Students walking past historic building, perfect for welcome or admission banners."
+      }
+    ]
+  },
+  "animation_patterns": {
+    "button_press": "Scale down to 0.95 with ease out",
+    "modals": "Bottom sheet slide up for quick actions (Visitor QR, Hall Ticket preview)",
+    "alerts": "Subtle bounce on notification icon if new"
+  },
+  "instructions_to_main_agent": [
+    "Use @expo/vector-icons for all service tile icons. The design relies on realistic large icons with a subtle background circle.",
+    "Ensure all interactive and key informational elements include a `data-testid` attribute (e.g., data-testid='login-button', data-testid='service-tile-library').",
+    "Implement the layout precisely using the defined 8pt spacing scale.",
+    "Follow the React Native safe area context to avoid overlaps with the notch/status bar.",
+    "Use react-native-reanimated for the SOS pulse animation.",
+    "The Home dashboard should be scrollable and modular so different roles (Student, Staff) see different grids."
+  ]
+}
