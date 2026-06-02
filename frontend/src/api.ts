@@ -56,6 +56,10 @@ export const api = {
   // attendance
   attendanceCheck: (data: any) => request<any>('POST', '/attendance/check', data),
   attendanceHistory: () => request<any[]>('GET', '/attendance/history'),
+  attendanceToday: () => request<any>('GET', '/attendance/today'),
+  attendanceStats: () => request<any>('GET', '/attendance/stats'),
+  attendanceGeofences: () => request<any[]>('GET', '/attendance/geofences'),
+  attendanceAdminToday: () => request<any>('GET', '/attendance/admin/today'),
 
   // library
   books: (q?: string) => request<any[]>('GET', `/library/books${q ? `?q=${encodeURIComponent(q)}` : ''}`),

@@ -1,113 +1,928 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal,
+  ActivityIndicator, Animated, Easing, Platform, Switch, Image,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { api } from '../../src/api';
+import { useAuth } from '../../src/auth';
 import { colors, radii, shadow, spacing } from '../../src/theme';
-import { Card, Pill, Badge, ScreenHeader, PrimaryButton, Empty } from '../../src/ui';
+import { Card, Pill, Badge, ScreenHeader, Empty } from '../../src/ui';
 
-export default function StaffAttendance() {
+type AttType = 'office' | 'wfh' | 'client_visit' | 'field';
+const TYPE_META: Record<AttType, { label: string; icon: string }> = {
+  office:       { label: 'Office',        icon: 'office-building-outline' },
+  wfh:          { label: 'Work From Home',icon: 'home-outline' },
+  client_visit: { label: 'Client Visit',  icon: 'briefcase-outline' },
+  field:        { label: 'Field Ops',     icon: 'map-marker-path' },
+};
+
+const STATUS_META: Record<string, { label: string; color: string }> = {
+  present:  { label: 'Present',  color: '#16A34A' },
+  late:     { label: 'Late',     color: '#F59E0B' },
+  half_day: { label: 'Half Day', color: '#F97316' },
+  absent:   { label: 'Absent',   color: '#94A3B8' },
+};
+
+// Mahindra Univ Bahadurpally — demo coordinates
+const MU_LAT = 17.5234;
+const MU_LON = 78.3941;
+
+export default function StaffAttendanceScreen() {
   const router = useRouter();
-  const [tab, setTab] = useState<'check' | 'history'>('check');
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const [tab, setTab] = useState<'today' | 'history' | 'stats' | 'team'>('today');
+  const [today, setToday] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [last, setLast] = useState<any>(null);
+  const [stats, setStats] = useState<any>(null);
+  const [team, setTeam] = useState<any>(null);
+  const [geofences, setGeofences] = useState<any[]>([]);
+  const [attType, setAttType] = useState<AttType>('office');
+  const [demoMode, setDemoMode] = useState(false);
+  const [demoInsideFence, setDemoInsideFence] = useState(true);
+  const [showCapture, setShowCapture] = useState(false);
+  const [captureKind, setCaptureKind] = useState<'in' | 'out'>('in');
 
-  const load = async () => { try { setHistory(await api.attendanceHistory()); } catch {} };
-  useEffect(() => { load(); }, []);
-
-  const check = async (type: 'in' | 'out') => {
-    setBusy(true);
+  const reload = useCallback(async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') { Alert.alert('Permission', 'Location permission is required'); setBusy(false); return; }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const res = await api.attendanceCheck({ latitude: loc.coords.latitude, longitude: loc.coords.longitude, type });
-      setLast(res);
-      if (res.on_campus) Alert.alert('Success', `Check-${type} recorded on campus.`);
-      else Alert.alert('Outside Campus', `You are ${(res.distance_m/1000).toFixed(1)} km from campus. Anti-proxy flag added.`);
-      load();
-    } catch (e: any) { Alert.alert('Error', e.message); }
-    setBusy(false);
+      const [t, h, s, g] = await Promise.all([
+        api.attendanceToday().catch(() => null),
+        api.attendanceHistory().catch(() => []),
+        api.attendanceStats().catch(() => null),
+        api.attendanceGeofences().catch(() => []),
+      ]);
+      setToday(t); setHistory(h); setStats(s); setGeofences(g);
+      if (isAdmin) {
+        const tm = await api.attendanceAdminToday().catch(() => null);
+        setTeam(tm);
+      }
+    } catch {}
+  }, [isAdmin]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const checkedIn = !!today?.check_in;
+  const checkedOut = !!today?.check_out;
+  const nextAction: 'in' | 'out' | 'done' = !checkedIn ? 'in' : (!checkedOut ? 'out' : 'done');
+
+  const onCheckPress = (kind: 'in' | 'out') => {
+    setCaptureKind(kind);
+    setShowCapture(true);
   };
+
+  const tabs = useMemo(
+    () => ([
+      { id: 'today',   label: 'Today',   icon: 'today-outline' },
+      { id: 'history', label: 'History', icon: 'time-outline' },
+      { id: 'stats',   label: 'Stats',   icon: 'stats-chart-outline' },
+      ...(isAdmin ? [{ id: 'team', label: 'Team', icon: 'people-outline' }] : []),
+    ]),
+    [isAdmin],
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Staff Attendance" subtitle="Geolocation-verified" onBack={() => router.back()} />
-      <View style={styles.tabs}>
-        <Pill label="Check In/Out" active={tab === 'check'} onPress={() => setTab('check')} testID="tab-att-check" />
-        <Pill label="History" active={tab === 'history'} onPress={() => setTab('history')} testID="tab-att-history" />
-      </View>
+      <ScreenHeader
+        title="Attendance"
+        subtitle="Geo + Face verified"
+        onBack={() => router.back()}
+      />
 
-      {tab === 'check' && (
-        <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xxl }}>
-          <LinearGradient colors={[colors.primaryDark, colors.primaryLight]} style={styles.heroCard}>
-            <MaterialCommunityIcons name="map-marker-radius-outline" size={48} color={colors.white} />
-            <Text style={styles.heroTitle}>Geofence Active</Text>
-            <Text style={styles.heroSub}>Tap below to mark your attendance</Text>
-          </LinearGradient>
+      <ScrollView
+        horizontal showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabRow}
+      >
+        {tabs.map((t: any) => (
+          <Pill
+            key={t.id}
+            label={t.label}
+            active={tab === t.id}
+            onPress={() => setTab(t.id)}
+            testID={`tab-${t.id}`}
+          />
+        ))}
+      </ScrollView>
 
-          <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-            <View style={{ flex: 1 }}>
-              <PrimaryButton label="Check In" onPress={() => check('in')} loading={busy} testID="checkin-btn" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <PrimaryButton label="Check Out" onPress={() => check('out')} loading={busy} testID="checkout-btn" />
-            </View>
-          </View>
+      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xxl }}>
+        {tab === 'today' && (
+          <TodayTab
+            today={today}
+            attType={attType}
+            setAttType={setAttType}
+            demoMode={demoMode}
+            setDemoMode={setDemoMode}
+            demoInsideFence={demoInsideFence}
+            setDemoInsideFence={setDemoInsideFence}
+            geofences={geofences}
+            nextAction={nextAction}
+            onCheck={onCheckPress}
+          />
+        )}
+        {tab === 'history' && <HistoryTab items={history} />}
+        {tab === 'stats' && <StatsTab stats={stats} />}
+        {tab === 'team' && <TeamTab team={team} />}
+      </ScrollView>
 
-          {last && (
-            <Card style={{ marginTop: spacing.md }} testID="last-check">
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontWeight: '700', color: colors.text }}>Last check-{last.type}</Text>
-                <Badge label={last.on_campus ? 'ON-CAMPUS' : 'OFF-CAMPUS'} color={last.on_campus ? colors.success : colors.sos} />
-              </View>
-              <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 6 }}>
-                Distance from campus: {(last.distance_m / 1000).toFixed(2)} km
-              </Text>
-              <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
-                {new Date(last.timestamp).toLocaleString()}
-              </Text>
-            </Card>
-          )}
-
-          <View style={styles.tipCard}>
-            <Ionicons name="information-circle" size={16} color={colors.info} />
-            <Text style={styles.tipText}>
-              Anti-proxy: Your location is logged for verification. Mock locations and outside-campus check-ins are flagged automatically.
-            </Text>
-          </View>
-        </ScrollView>
-      )}
-
-      {tab === 'history' && (
-        <ScrollView contentContainerStyle={{ padding: spacing.md }}>
-          {history.length === 0 ? <Empty icon="time-outline" message="No attendance records yet" /> : history.map((h, i) => (
-            <Card key={i} style={{ marginBottom: spacing.sm }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View>
-                  <Text style={{ fontWeight: '700', color: colors.text }}>Check-{h.type}</Text>
-                  <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>{new Date(h.timestamp).toLocaleString()}</Text>
-                </View>
-                <Badge label={h.on_campus ? 'ON-CAMPUS' : 'OFF-CAMPUS'} color={h.on_campus ? colors.success : colors.sos} />
-              </View>
-            </Card>
-          ))}
-        </ScrollView>
+      {showCapture && (
+        <CaptureFlow
+          kind={captureKind}
+          attType={attType}
+          demoMode={demoMode}
+          demoInsideFence={demoInsideFence}
+          onDone={async () => {
+            setShowCapture(false);
+            await reload();
+          }}
+          onClose={() => setShowCapture(false)}
+        />
       )}
     </SafeAreaView>
   );
 }
 
+// ---------- TODAY ----------
+const TodayTab = ({
+  today, attType, setAttType, demoMode, setDemoMode,
+  demoInsideFence, setDemoInsideFence, geofences, nextAction, onCheck,
+}: any) => {
+  const status = today?.status || 'absent';
+  const sm = STATUS_META[status] || STATUS_META.absent;
+  const hours = today?.work_seconds ? (today.work_seconds / 3600).toFixed(1) : '0.0';
+
+  return (
+    <View>
+      {/* Status hero */}
+      <LinearGradient
+        colors={[colors.primaryDark, colors.primaryLight]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={styles.hero}
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View>
+            <Text style={styles.heroKicker}>{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}</Text>
+            <Text style={styles.heroTitle}>
+              {nextAction === 'in'   ? 'Ready to check in' :
+               nextAction === 'out'  ? 'Currently checked in' :
+                                       'Day complete ✓'}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'center' }}>
+              <Badge label={sm.label.toUpperCase()} color={sm.color} bg="rgba(255,255,255,0.2)" />
+              {today?.check_in?.attendance_type && (
+                <Badge
+                  label={TYPE_META[today.check_in.attendance_type as AttType]?.label.toUpperCase() || ''}
+                  color={colors.white}
+                  bg="rgba(255,255,255,0.18)"
+                />
+              )}
+            </View>
+          </View>
+          <MaterialCommunityIcons
+            name={nextAction === 'done' ? 'check-circle-outline' : 'clock-time-four-outline'}
+            size={56} color="rgba(255,255,255,0.9)"
+          />
+        </View>
+
+        <View style={styles.timeRow}>
+          <TimeBlock label="Check-in" value={fmtTime(today?.check_in?.timestamp)} />
+          <View style={styles.timeDivider} />
+          <TimeBlock label="Check-out" value={fmtTime(today?.check_out?.timestamp)} />
+          <View style={styles.timeDivider} />
+          <TimeBlock label="Work" value={`${hours}h`} />
+        </View>
+      </LinearGradient>
+
+      {/* Attendance type selector */}
+      {nextAction === 'in' && (
+        <Card style={{ marginTop: spacing.md }}>
+          <Text style={styles.cardLabel}>ATTENDANCE TYPE</Text>
+          <View style={styles.typeRow}>
+            {(Object.keys(TYPE_META) as AttType[]).map((t) => {
+              const m = TYPE_META[t];
+              const active = attType === t;
+              return (
+                <TouchableOpacity
+                  key={t}
+                  onPress={() => setAttType(t)}
+                  activeOpacity={0.7}
+                  testID={`atttype-${t}`}
+                  style={[styles.typeBtn, active && styles.typeBtnActive]}
+                >
+                  <MaterialCommunityIcons name={m.icon as any} size={20} color={active ? colors.primary : colors.textSecondary} />
+                  <Text style={[styles.typeBtnText, active && { color: colors.primary }]}>{m.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Card>
+      )}
+
+      {/* Action button */}
+      {nextAction !== 'done' && (
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => onCheck(nextAction)}
+          testID={`action-${nextAction}`}
+          style={styles.checkBtnWrap}
+        >
+          <LinearGradient
+            colors={nextAction === 'in' ? ['#16A34A', '#15803D'] : [colors.primaryDark, colors.primary]}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            style={styles.checkBtn}
+          >
+            <MaterialCommunityIcons
+              name={nextAction === 'in' ? 'login-variant' : 'logout-variant'}
+              size={26} color="#FFFFFF"
+            />
+            <Text style={styles.checkBtnText}>
+              {nextAction === 'in' ? 'Check In Now' : 'Check Out Now'}
+            </Text>
+            <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
+
+      {/* Demo mode toggle */}
+      <Card style={{ marginTop: spacing.md }}>
+        <View style={styles.demoRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardLabel}>DEMO MODE</Text>
+            <Text style={styles.demoSub}>Simulate location for demo / testing</Text>
+          </View>
+          <Switch
+            value={demoMode}
+            onValueChange={setDemoMode}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor="#FFFFFF"
+            testID="demo-toggle"
+          />
+        </View>
+        {demoMode && (
+          <View style={styles.demoBox}>
+            <TouchableOpacity
+              onPress={() => setDemoInsideFence(true)}
+              style={[styles.demoChip, demoInsideFence && styles.demoChipActive]}
+              testID="demo-inside"
+            >
+              <Ionicons name="checkmark-circle" size={16} color={demoInsideFence ? colors.success : colors.textMuted} />
+              <Text style={[styles.demoChipText, demoInsideFence && { color: colors.success }]}>
+                Inside Mahindra Univ
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setDemoInsideFence(false)}
+              style={[styles.demoChip, !demoInsideFence && styles.demoChipActiveBad]}
+              testID="demo-outside"
+            >
+              <Ionicons name="alert-circle" size={16} color={!demoInsideFence ? colors.sos : colors.textMuted} />
+              <Text style={[styles.demoChipText, !demoInsideFence && { color: colors.sos }]}>
+                Outside Geofence
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </Card>
+
+      {/* Configured geofences */}
+      <Card style={{ marginTop: spacing.md }}>
+        <Text style={styles.cardLabel}>AUTHORIZED LOCATIONS</Text>
+        {geofences.map((g: any) => (
+          <View key={g.id} style={styles.fenceRow}>
+            <View style={[styles.fenceIcon, { backgroundColor: g.type === 'wfh' ? '#DBEAFE' : `${colors.primary}15` }]}>
+              <MaterialCommunityIcons
+                name={g.type === 'wfh' ? 'home-outline' : g.type === 'branch' ? 'office-building-outline' : 'school-outline'}
+                size={18}
+                color={g.type === 'wfh' ? colors.info : colors.primary}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fenceName}>{g.name}</Text>
+              <Text style={styles.fenceAddr}>{g.address}</Text>
+            </View>
+            {g.type !== 'wfh' && (
+              <Badge label={`${g.radius_m}m`} color={colors.primary} />
+            )}
+          </View>
+        ))}
+      </Card>
+    </View>
+  );
+};
+
+// ---------- HISTORY ----------
+const HistoryTab = ({ items }: { items: any[] }) => {
+  // group by date
+  const byDay = useMemo(() => {
+    const m: Record<string, any[]> = {};
+    items.forEach((it) => {
+      const d = (it.timestamp || '').slice(0, 10);
+      (m[d] = m[d] || []).push(it);
+    });
+    return Object.entries(m).sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  }, [items]);
+
+  if (!items.length) return <Empty icon="time-outline" message="No attendance records yet" />;
+
+  return (
+    <View>
+      {byDay.map(([day, evts]) => {
+        const inE = evts.find((x) => x.type === 'in' && x.accepted);
+        const outE = [...evts].reverse().find((x) => x.type === 'out' && x.accepted);
+        const stat = inE?.status || 'absent';
+        const sm = STATUS_META[stat];
+        return (
+          <Card key={day} style={{ marginBottom: spacing.sm }} testID={`day-${day}`}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View>
+                <Text style={styles.dayLabel}>
+                  {new Date(day + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
+                </Text>
+                <Text style={styles.daySub}>
+                  In: {fmtTime(inE?.timestamp)}  ·  Out: {fmtTime(outE?.timestamp)}
+                </Text>
+              </View>
+              <Badge label={sm.label} color={sm.color} />
+            </View>
+            <View style={styles.eventList}>
+              {evts.map((e, i) => (
+                <View key={i} style={styles.eventRow}>
+                  <View style={[styles.eventDot, { backgroundColor: e.accepted ? colors.success : colors.sos }]} />
+                  <Text style={styles.eventText}>
+                    Check-{e.type} · {fmtTime(e.timestamp)} · {Math.round(e.face_score * 100)}% face
+                    {!e.accepted ? ` · ${labelReason(e.rejection_reason)}` : ''}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </Card>
+        );
+      })}
+    </View>
+  );
+};
+
+// ---------- STATS ----------
+const StatsTab = ({ stats }: { stats: any }) => {
+  if (!stats) return <Empty icon="stats-chart-outline" message="No data yet" />;
+  const cards: { label: string; value: string | number; color: string; icon: string }[] = [
+    { label: 'Present Days', value: stats.present_days, color: '#16A34A', icon: 'check-circle-outline' },
+    { label: 'Late Arrivals', value: stats.late_days, color: '#F59E0B', icon: 'clock-alert-outline' },
+    { label: 'WFH Days', value: stats.wfh_days, color: '#3B82F6', icon: 'home-outline' },
+    { label: 'Absent', value: stats.absent_days, color: '#EF4444', icon: 'close-circle-outline' },
+  ];
+  return (
+    <View>
+      <Card>
+        <Text style={styles.cardLabel}>{stats.month?.toUpperCase()} · MONTHLY SUMMARY</Text>
+        <Text style={styles.bigPct}>{stats.attendance_pct}%</Text>
+        <Text style={styles.bigPctLabel}>
+          {stats.present_days}/{stats.working_days_so_far} working days
+        </Text>
+        <View style={styles.barTrack2}>
+          <View style={[styles.barFill2, { width: `${Math.min(100, stats.attendance_pct)}%` }]} />
+        </View>
+      </Card>
+
+      <View style={styles.statsGrid}>
+        {cards.map((c) => (
+          <View key={c.label} style={styles.statCard}>
+            <View style={[styles.statIcon, { backgroundColor: `${c.color}1A` }]}>
+              <MaterialCommunityIcons name={c.icon as any} size={20} color={c.color} />
+            </View>
+            <Text style={styles.statValue}>{c.value}</Text>
+            <Text style={styles.statLabel}>{c.label}</Text>
+          </View>
+        ))}
+      </View>
+
+      <Card style={{ marginTop: spacing.md }}>
+        <Text style={styles.cardLabel}>WORK HOURS</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+          <View>
+            <Text style={styles.kpiBig}>{stats.total_work_hours}h</Text>
+            <Text style={styles.kpiLabel}>Total this month</Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.kpiBig}>{stats.avg_work_hours}h</Text>
+            <Text style={styles.kpiLabel}>Avg / day</Text>
+          </View>
+        </View>
+      </Card>
+
+      <Card style={{ marginTop: spacing.md }}>
+        <Text style={styles.cardLabel}>FACE RECOGNITION</Text>
+        <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: 6 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.kpiBig}>{stats.failed_face_verifications}</Text>
+            <Text style={styles.kpiLabel}>Failed</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.kpiBig, { color: colors.sos }]}>{stats.spoof_attempts}</Text>
+            <Text style={styles.kpiLabel}>Spoofs blocked</Text>
+          </View>
+        </View>
+      </Card>
+    </View>
+  );
+};
+
+// ---------- TEAM (Admin) ----------
+const TeamTab = ({ team }: { team: any }) => {
+  if (!team) return <Empty icon="people-outline" message="No data" />;
+  const s = team.summary;
+  return (
+    <View>
+      <View style={styles.statsGrid}>
+        <SummaryCard label="Total" value={s.total} color={colors.text} icon="account-group-outline" />
+        <SummaryCard label="Present" value={s.present} color="#16A34A" icon="check-circle-outline" />
+        <SummaryCard label="Late" value={s.late} color="#F59E0B" icon="clock-alert-outline" />
+        <SummaryCard label="Absent" value={s.absent} color="#EF4444" icon="close-circle-outline" />
+      </View>
+      <Card style={{ marginTop: spacing.md }}>
+        <Text style={styles.cardLabel}>STAFF STATUS — TODAY</Text>
+        {team.staff.map((p: any) => {
+          const sm = STATUS_META[p.status] || STATUS_META.absent;
+          return (
+            <View key={p.id} style={styles.staffRow}>
+              <View style={styles.staffAvatar}>
+                <Text style={styles.staffInit}>{(p.name || '?').split(' ').map((x: string) => x[0]).slice(0, 2).join('')}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.staffName}>{p.name}</Text>
+                <Text style={styles.staffMeta}>{p.department || '—'} · {p.employee_id || '—'}</Text>
+                <Text style={styles.staffMeta}>
+                  In {fmtTime(p.check_in)} · Out {fmtTime(p.check_out)}
+                </Text>
+              </View>
+              <Badge label={sm.label} color={sm.color} />
+            </View>
+          );
+        })}
+      </Card>
+    </View>
+  );
+};
+
+const SummaryCard = ({ label, value, color, icon }: any) => (
+  <View style={styles.statCard}>
+    <View style={[styles.statIcon, { backgroundColor: `${color}1A` }]}>
+      <MaterialCommunityIcons name={icon} size={20} color={color} />
+    </View>
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statLabel}>{label}</Text>
+  </View>
+);
+
+// ---------- CAPTURE FLOW (modal) ----------
+type CaptureStep = 'permissions' | 'camera' | 'verifying' | 'result';
+
+const CaptureFlow = ({
+  kind, attType, demoMode, demoInsideFence, onDone, onClose,
+}: {
+  kind: 'in' | 'out';
+  attType: AttType;
+  demoMode: boolean;
+  demoInsideFence: boolean;
+  onDone: () => void;
+  onClose: () => void;
+}) => {
+  const [step, setStep] = useState<CaptureStep>('permissions');
+  const [permission, requestPermission] = useCameraPermissions();
+  const [selfieUri, setSelfieUri] = useState<string | null>(null);
+  const [result, setResult] = useState<any>(null);
+  const camRef = useRef<any>(null);
+
+  useEffect(() => {
+    (async () => {
+      if (Platform.OS === 'web') {
+        // Skip camera permission flow on web — use placeholder selfie
+        setStep('camera');
+        return;
+      }
+      if (!permission) return;
+      if (!permission.granted) {
+        const r = await requestPermission();
+        if (!r.granted) { onClose(); return; }
+      }
+      setStep('camera');
+    })();
+  }, [permission]);
+
+  const snap = async () => {
+    if (Platform.OS === 'web') {
+      // mock selfie on web
+      setSelfieUri('placeholder');
+      setTimeout(() => verify(null), 200);
+      return;
+    }
+    try {
+      const photo = await camRef.current?.takePictureAsync({ quality: 0.4, base64: true, skipProcessing: true });
+      setSelfieUri(photo?.uri || null);
+      verify(photo?.base64 || null);
+    } catch (e) {
+      verify(null);
+    }
+  };
+
+  const verify = async (b64: string | null) => {
+    setStep('verifying');
+    try {
+      // Get GPS
+      let lat = MU_LAT, lon = MU_LON, accuracy = 8, mock = false;
+      if (demoMode) {
+        if (demoInsideFence) {
+          lat = MU_LAT + (Math.random() - 0.5) * 0.001; // ~50m jitter
+          lon = MU_LON + (Math.random() - 0.5) * 0.001;
+        } else {
+          lat = 17.43; // ~10km away
+          lon = 78.50;
+        }
+      } else if (Platform.OS !== 'web') {
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+            lat = loc.coords.latitude;
+            lon = loc.coords.longitude;
+            accuracy = loc.coords.accuracy || 8;
+            // @ts-ignore — mocked field on some devices
+            mock = !!loc.mocked;
+          }
+        } catch {}
+      }
+      const res = await api.attendanceCheck({
+        latitude: lat,
+        longitude: lon,
+        accuracy_m: accuracy,
+        type: kind,
+        attendance_type: attType,
+        selfie_b64: b64 ? 'b64-' + (b64?.length || 1) : 'placeholder', // we don't ship the real bytes for size
+        is_mock_location: mock,
+      });
+      // Give a short "scanning" animation feel
+      setTimeout(() => { setResult(res); setStep('result'); }, 1100);
+    } catch (e: any) {
+      setResult({ accepted: false, rejection_reason: 'network_error', message: e?.message });
+      setStep('result');
+    }
+  };
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalRoot}>
+        <View style={styles.modalCard}>
+          <View style={styles.modalHead}>
+            <Text style={styles.modalTitle}>
+              {kind === 'in' ? 'Check In' : 'Check Out'}
+            </Text>
+            <TouchableOpacity onPress={onClose} testID="capture-close">
+              <Ionicons name="close" size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {step === 'permissions' && (
+            <View style={styles.center}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={styles.captureMsg}>Requesting camera & location…</Text>
+            </View>
+          )}
+
+          {step === 'camera' && (
+            <View>
+              <View style={styles.cameraWrap}>
+                {Platform.OS === 'web' || !permission?.granted ? (
+                  <View style={[styles.cameraFallback]}>
+                    <MaterialCommunityIcons name="face-recognition" size={64} color={colors.primary} />
+                    <Text style={styles.captureMsg}>
+                      Selfie capture preview{'\n'}(camera unavailable in web preview)
+                    </Text>
+                  </View>
+                ) : (
+                  <CameraView ref={camRef} style={styles.camera} facing="front" />
+                )}
+                <View style={styles.faceFrame} />
+              </View>
+              <Text style={styles.captureHint}>
+                Center your face in the frame & ensure good lighting.
+              </Text>
+              <TouchableOpacity activeOpacity={0.85} onPress={snap} style={styles.snapBtn} testID="snap-btn">
+                <MaterialCommunityIcons name="camera-iris" size={22} color="#FFFFFF" />
+                <Text style={styles.snapText}>Capture & Verify</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {step === 'verifying' && <VerifyingView selfieUri={selfieUri} />}
+
+          {step === 'result' && result && (
+            <ResultView result={result} kind={kind} onDone={onDone} />
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const VerifyingView = ({ selfieUri }: { selfieUri: string | null }) => {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }),
+    ).start();
+  }, []);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] });
+
+  return (
+    <View style={styles.center}>
+      <View style={styles.verifyImgWrap}>
+        {selfieUri && selfieUri !== 'placeholder' ? (
+          <Image source={{ uri: selfieUri }} style={styles.verifyImg} />
+        ) : (
+          <View style={[styles.verifyImg, { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primaryBg }]}>
+            <MaterialCommunityIcons name="face-recognition" size={48} color={colors.primary} />
+          </View>
+        )}
+        <Animated.View style={[styles.verifyPulse, { transform: [{ scale }], opacity }]} />
+      </View>
+      <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.md }} />
+      <Text style={styles.captureMsg}>Verifying face & location…</Text>
+      <Text style={styles.captureSub}>Anti-spoof scan · GPS check · Face match</Text>
+    </View>
+  );
+};
+
+const ResultView = ({ result, kind, onDone }: { result: any; kind: 'in' | 'out'; onDone: () => void }) => {
+  const ok = !!result.accepted;
+  const fScore = Math.round((result.face_score || 0) * 100);
+  return (
+    <View>
+      <View style={[styles.resultBadge, { backgroundColor: ok ? '#DCFCE7' : '#FEE2E2' }]}>
+        <Ionicons name={ok ? 'checkmark-circle' : 'close-circle'} size={56} color={ok ? '#16A34A' : '#DC2626'} />
+        <Text style={[styles.resultTitle, { color: ok ? '#15803D' : '#991B1B' }]}>
+          {ok
+            ? `Check-${kind} recorded ✓`
+            : labelReason(result.rejection_reason) + ' ✕'}
+        </Text>
+        {result.status && ok && (
+          <Badge label={STATUS_META[result.status]?.label || result.status} color={STATUS_META[result.status]?.color || colors.text} />
+        )}
+      </View>
+
+      <View style={styles.resultRows}>
+        <ResultRow
+          icon="face-recognition"
+          label="Face match"
+          value={`${fScore}%`}
+          ok={result.face_passed}
+        />
+        <ResultRow
+          icon="map-marker-radius"
+          label="Location"
+          value={
+            result.inside_geofence
+              ? (result.geofence_name || 'Authorized location')
+              : (typeof result.distance_m === 'number'
+                  ? `${(result.distance_m / 1000).toFixed(2)}km off`
+                  : (result.rejection_reason === 'network_error' ? 'Cannot verify' : 'Out of range'))
+          }
+          ok={result.inside_geofence}
+        />
+        <ResultRow
+          icon="shield-check-outline"
+          label="Anti-spoof"
+          value={result.spoof_detected ? 'Spoof detected' : 'Live person'}
+          ok={!result.spoof_detected}
+        />
+        <ResultRow
+          icon="cellphone-marker"
+          label="Mock location"
+          value={result.is_mock_location ? 'Detected!' : 'Not detected'}
+          ok={!result.is_mock_location}
+        />
+      </View>
+
+      <TouchableOpacity activeOpacity={0.85} onPress={onDone} style={styles.doneBtn} testID="result-done">
+        <Text style={styles.doneText}>Done</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const ResultRow = ({ icon, label, value, ok }: any) => (
+  <View style={styles.resRow}>
+    <MaterialCommunityIcons name={icon} size={18} color={ok ? colors.success : colors.sos} />
+    <Text style={styles.resLabel}>{label}</Text>
+    <Text style={[styles.resValue, { color: ok ? colors.success : colors.sos }]}>{value}</Text>
+    <Ionicons name={ok ? 'checkmark' : 'close'} size={16} color={ok ? colors.success : colors.sos} />
+  </View>
+);
+
+const TimeBlock = ({ label, value }: { label: string; value: string }) => (
+  <View style={{ flex: 1, alignItems: 'center' }}>
+    <Text style={styles.timeVal}>{value || '—'}</Text>
+    <Text style={styles.timeLab}>{label}</Text>
+  </View>
+);
+
+function fmtTime(iso?: string) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+  } catch { return '—'; }
+}
+
+function labelReason(r?: string) {
+  if (!r) return 'Rejected';
+  return ({
+    outside_geofence: 'Outside Geofence',
+    face_mismatch: 'Face Mismatch',
+    spoof_attempt: 'Spoof Detected',
+    mock_location_detected: 'Mock Location',
+    network_error: 'Network Error',
+  } as any)[r] || r;
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  tabs: { flexDirection: 'row', padding: spacing.md, gap: 8 },
-  heroCard: { padding: spacing.lg, borderRadius: radii.xl, alignItems: 'center', ...shadow.cardHeavy },
-  heroTitle: { fontSize: 22, fontWeight: '800', color: colors.white, marginTop: 8 },
-  heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
-  tipCard: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: '#DBEAFE', padding: spacing.sm, borderRadius: radii.md, marginTop: spacing.md },
-  tipText: { flex: 1, fontSize: 11, color: colors.info, fontWeight: '500', lineHeight: 16 },
+  tabRow: {
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: 6,
+  },
+  hero: {
+    borderRadius: radii.xl,
+    padding: spacing.md,
+    ...shadow.cardHeavy,
+  },
+  heroKicker: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.85)', letterSpacing: 1.2 },
+  heroTitle: { fontSize: 22, fontWeight: '800', color: colors.white, marginTop: 4 },
+  timeRow: {
+    flexDirection: 'row', alignItems: 'center',
+    marginTop: spacing.md, backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: radii.md, padding: spacing.sm,
+  },
+  timeDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.3)', alignSelf: 'stretch' },
+  timeVal: { fontSize: 17, fontWeight: '800', color: colors.white },
+  timeLab: { fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 2, letterSpacing: 0.8, fontWeight: '600' },
+  cardLabel: { fontSize: 10, fontWeight: '700', color: colors.textMuted, letterSpacing: 1.4 },
+  typeRow: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10,
+  },
+  typeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8,
+    backgroundColor: colors.background,
+    borderRadius: radii.pill,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  typeBtnActive: {
+    backgroundColor: colors.primaryBg,
+    borderColor: colors.primary,
+  },
+  typeBtnText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+  checkBtnWrap: { marginTop: spacing.md, borderRadius: radii.lg, overflow: 'hidden' },
+  checkBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 10, paddingVertical: 18,
+  },
+  checkBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '800' },
+  demoRow: { flexDirection: 'row', alignItems: 'center' },
+  demoSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  demoBox: {
+    flexDirection: 'row', gap: 8, marginTop: 10,
+  },
+  demoChip: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 10, borderRadius: radii.md,
+    backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border,
+  },
+  demoChipActive: { backgroundColor: '#DCFCE7', borderColor: colors.success },
+  demoChipActiveBad: { backgroundColor: '#FEE2E2', borderColor: colors.sos },
+  demoChipText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
+  fenceRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    paddingVertical: 10,
+  },
+  fenceIcon: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  fenceName: { fontSize: 13, fontWeight: '700', color: colors.text },
+  fenceAddr: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
+  dayLabel: { fontSize: 14, fontWeight: '700', color: colors.text },
+  daySub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  eventList: { marginTop: spacing.sm, gap: 4 },
+  eventRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  eventDot: { width: 6, height: 6, borderRadius: 3 },
+  eventText: { fontSize: 11, color: colors.textSecondary, flex: 1 },
+  bigPct: { fontSize: 40, fontWeight: '800', color: colors.primary, marginTop: 6 },
+  bigPctLabel: { fontSize: 12, color: colors.textSecondary, marginTop: -2 },
+  barTrack2: {
+    height: 8, backgroundColor: colors.border,
+    borderRadius: 4, marginTop: 10, overflow: 'hidden',
+  },
+  barFill2: { height: '100%', backgroundColor: colors.primary, borderRadius: 4 },
+  statsGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  statCard: {
+    flex: 1, minWidth: '47%',
+    backgroundColor: colors.surface, borderRadius: radii.lg,
+    padding: spacing.md, ...shadow.card,
+  },
+  statIcon: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 8,
+  },
+  statValue: { fontSize: 22, fontWeight: '800', color: colors.text },
+  statLabel: { fontSize: 11, color: colors.textSecondary, marginTop: 2, fontWeight: '600' },
+  kpiBig: { fontSize: 22, fontWeight: '800', color: colors.text },
+  kpiLabel: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+  staffRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  staffAvatar: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: colors.primaryBg,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  staffInit: { fontWeight: '700', color: colors.primary, fontSize: 13 },
+  staffName: { fontSize: 13, fontWeight: '700', color: colors.text },
+  staffMeta: { fontSize: 11, color: colors.textSecondary, marginTop: 1 },
+
+  // Modal
+  modalRoot: {
+    flex: 1, backgroundColor: 'rgba(15,23,42,0.65)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: spacing.md, paddingBottom: spacing.lg,
+    maxHeight: '92%',
+  },
+  modalHead: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
+  center: { alignItems: 'center', paddingVertical: spacing.xl },
+  captureMsg: { color: colors.textSecondary, marginTop: 10, textAlign: 'center', fontSize: 13 },
+  captureSub: { color: colors.textMuted, marginTop: 4, fontSize: 11 },
+  cameraWrap: {
+    aspectRatio: 3 / 4,
+    borderRadius: radii.xl,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    position: 'relative',
+  },
+  camera: { flex: 1 },
+  cameraFallback: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F172A' },
+  faceFrame: {
+    position: 'absolute',
+    top: '12%', left: '15%', right: '15%', bottom: '20%',
+    borderWidth: 3, borderColor: 'rgba(255,255,255,0.7)',
+    borderRadius: 999,
+  },
+  captureHint: { fontSize: 12, color: colors.textSecondary, marginTop: spacing.sm, textAlign: 'center' },
+  snapBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: colors.primary,
+    paddingVertical: 14, borderRadius: radii.lg,
+    marginTop: spacing.md,
+  },
+  snapText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
+
+  verifyImgWrap: { width: 120, height: 120, borderRadius: 60, position: 'relative' },
+  verifyImg: { width: 120, height: 120, borderRadius: 60, borderWidth: 4, borderColor: colors.primary },
+  verifyPulse: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    borderRadius: 60, borderWidth: 3, borderColor: colors.primary,
+  },
+  resultBadge: {
+    alignItems: 'center', padding: spacing.md, borderRadius: radii.lg,
+    gap: 6,
+  },
+  resultTitle: { fontSize: 17, fontWeight: '800', marginTop: 4 },
+  resultRows: { marginTop: spacing.md, gap: 4 },
+  resRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  resLabel: { flex: 1, fontSize: 13, color: colors.text, fontWeight: '600' },
+  resValue: { fontSize: 12, fontWeight: '700' },
+  doneBtn: {
+    backgroundColor: colors.primary,
+    padding: 14, borderRadius: radii.md,
+    marginTop: spacing.md, alignItems: 'center',
+  },
+  doneText: { color: '#FFFFFF', fontWeight: '800' },
 });

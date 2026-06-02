@@ -99,6 +99,11 @@ class AttendanceCheckIn(BaseModel):
     latitude: float
     longitude: float
     type: str  # "in" or "out"
+    accuracy_m: Optional[float] = None
+    selfie_b64: Optional[str] = None     # base64 selfie image (we just store hash for demo)
+    attendance_type: Optional[str] = "office"  # office | wfh | client_visit | field
+    geofence_id: Optional[str] = None
+    is_mock_location: Optional[bool] = False
 
 class Complaint(BaseModel):
     id: Optional[str] = None
@@ -336,8 +341,39 @@ async def list_visitors(user: dict = Depends(get_current_user)):
     return await cursor.to_list(100)
 
 # ---------- STAFF ATTENDANCE ----------
-CAMPUS_LAT = 19.0760
-CAMPUS_LON = 72.8777
+# Mahindra University main campus (Bahadurpally, Hyderabad)
+GEOFENCES = [
+    {
+        "id": "mu-main",
+        "name": "Mahindra University — Main Campus",
+        "address": "Bahadurpally, Hyderabad, Telangana",
+        "lat": 17.5234,
+        "lon": 78.3941,
+        "radius_m": 500,
+        "type": "office",
+        "active": True,
+    },
+    {
+        "id": "mu-hyd-office",
+        "name": "MU Corporate Office — HITEC City",
+        "address": "Madhapur, Hyderabad",
+        "lat": 17.4474,
+        "lon": 78.3762,
+        "radius_m": 200,
+        "type": "branch",
+        "active": True,
+    },
+    {
+        "id": "wfh-zone",
+        "name": "Work From Home",
+        "address": "Any location with attendance type = WFH",
+        "lat": 0.0,
+        "lon": 0.0,
+        "radius_m": 0,
+        "type": "wfh",
+        "active": True,
+    },
+]
 
 def haversine_m(lat1, lon1, lat2, lon2):
     from math import radians, sin, cos, sqrt, atan2
@@ -348,29 +384,285 @@ def haversine_m(lat1, lon1, lat2, lon2):
     a = sin(dlat/2)**2 + cos(p1)*cos(p2)*sin(dlon/2)**2
     return 2*R*atan2(sqrt(a), sqrt(1-a))
 
+
+def _match_geofence(lat: float, lon: float, attendance_type: str = "office"):
+    """Return (matched_fence, distance) — best matching geofence within radius, or None."""
+    if attendance_type == "wfh":
+        wfh = next((g for g in GEOFENCES if g["type"] == "wfh"), None)
+        return wfh, 0.0
+    best = None
+    best_dist = float("inf")
+    for g in GEOFENCES:
+        if g["type"] == "wfh" or not g["active"]:
+            continue
+        d = haversine_m(lat, lon, g["lat"], g["lon"])
+        if d <= g["radius_m"] and d < best_dist:
+            best = g
+            best_dist = d
+    if best:
+        return best, best_dist
+    # No match — return nearest fence with its distance
+    nearest = min(
+        (g for g in GEOFENCES if g["type"] != "wfh"),
+        key=lambda g: haversine_m(lat, lon, g["lat"], g["lon"]),
+    )
+    return None, haversine_m(lat, lon, nearest["lat"], nearest["lon"])
+
+
+def _face_match_score(selfie_present: bool) -> dict:
+    """Mocked face recognition: returns score, pass/fail, and anti-spoof status."""
+    if not selfie_present:
+        return {"score": 0.0, "passed": False, "spoof_detected": False, "reason": "no_selfie"}
+    # Deterministic-ish "good" score based on time
+    seed = int(datetime.now().timestamp()) % 100
+    # 92% of the time, succeed at 88-99% match
+    if seed < 92:
+        score = round(0.88 + (seed % 11) / 100.0, 3)
+        return {"score": score, "passed": True, "spoof_detected": False, "reason": "ok"}
+    # 5% — low confidence
+    if seed < 97:
+        return {"score": 0.72, "passed": False, "spoof_detected": False, "reason": "low_confidence"}
+    # 3% — spoof
+    return {"score": 0.41, "passed": False, "spoof_detected": True, "reason": "spoof_attempt"}
+
+
+def _attendance_status(check_in_ts: datetime) -> str:
+    """Office start at 09:30; >09:31 = late; >12:00 = half-day."""
+    t = check_in_ts.hour + check_in_ts.minute / 60.0
+    if t > 12.0:
+        return "half_day"
+    if t > 9.5:
+        return "late"
+    return "present"
+
+
+@api.get("/attendance/geofences")
+async def list_geofences(user: dict = Depends(get_current_user)):
+    return GEOFENCES
+
+
 @api.post("/attendance/check")
 async def attendance_check(body: AttendanceCheckIn, user: dict = Depends(get_current_user)):
-    distance = haversine_m(body.latitude, body.longitude, CAMPUS_LAT, CAMPUS_LON)
-    on_campus = distance <= 5000  # 5km demo radius (campus area)
+    now = datetime.now(timezone.utc)
+    fence, distance = _match_geofence(body.latitude, body.longitude, body.attendance_type or "office")
+    face = _face_match_score(bool(body.selfie_b64))
+
+    inside = fence is not None
+    accepted = (inside and face["passed"] and not body.is_mock_location)
+    rejection_reason = None
+    if body.is_mock_location:
+        rejection_reason = "mock_location_detected"
+        accepted = False
+    elif not inside:
+        rejection_reason = "outside_geofence"
+    elif face["spoof_detected"]:
+        rejection_reason = "spoof_attempt"
+    elif not face["passed"]:
+        rejection_reason = "face_mismatch"
+
+    status_label = None
+    if body.type == "in" and accepted:
+        status_label = _attendance_status(now)
+
     rec = {
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
         "name": user["name"],
-        "type": body.type,
+        "department": user.get("department"),
+        "type": body.type,                          # in | out
+        "attendance_type": body.attendance_type or "office",
         "lat": body.latitude,
         "lon": body.longitude,
+        "accuracy_m": body.accuracy_m,
+        "is_mock_location": bool(body.is_mock_location),
         "distance_m": round(distance, 1),
-        "on_campus": on_campus,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "geofence_id": fence["id"] if fence else None,
+        "geofence_name": fence["name"] if fence else None,
+        "inside_geofence": inside,
+        "face_score": face["score"],
+        "face_passed": face["passed"],
+        "spoof_detected": face["spoof_detected"],
+        "accepted": accepted,
+        "rejection_reason": rejection_reason,
+        "status": status_label,
+        "timestamp": now.isoformat(),
+        "on_campus": inside,  # backward-compat
     }
     await db.attendance.insert_one({**rec})
     rec.pop("_id", None)
     return rec
 
+
 @api.get("/attendance/history")
 async def attendance_history(user: dict = Depends(get_current_user)):
-    cursor = db.attendance.find({"user_id": user["id"]}, {"_id": 0}).sort("timestamp", -1).limit(30)
-    return await cursor.to_list(30)
+    cursor = db.attendance.find({"user_id": user["id"]}, {"_id": 0}).sort("timestamp", -1).limit(60)
+    return await cursor.to_list(60)
+
+
+@api.get("/attendance/today")
+async def attendance_today(user: dict = Depends(get_current_user)):
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    cursor = db.attendance.find(
+        {"user_id": user["id"], "timestamp": {"$gte": today_start}},
+        {"_id": 0},
+    ).sort("timestamp", 1)
+    items = await cursor.to_list(100)
+    check_in = next((x for x in items if x["type"] == "in" and x.get("accepted")), None)
+    check_out = next((x for x in reversed(items) if x["type"] == "out" and x.get("accepted")), None)
+    work_seconds = 0
+    if check_in and check_out:
+        try:
+            ci = datetime.fromisoformat(check_in["timestamp"].replace("Z", "+00:00"))
+            co = datetime.fromisoformat(check_out["timestamp"].replace("Z", "+00:00"))
+            work_seconds = max(0, int((co - ci).total_seconds()))
+        except Exception:
+            work_seconds = 0
+    return {
+        "date": today_start[:10],
+        "check_in": check_in,
+        "check_out": check_out,
+        "events": items,
+        "work_seconds": work_seconds,
+        "status": check_in.get("status") if check_in else "absent",
+    }
+
+
+@api.get("/attendance/stats")
+async def attendance_stats(user: dict = Depends(get_current_user)):
+    """Monthly aggregates for current month."""
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    cursor = db.attendance.find(
+        {"user_id": user["id"], "timestamp": {"$gte": month_start}},
+        {"_id": 0},
+    ).sort("timestamp", 1)
+    items = await cursor.to_list(1000)
+
+    by_day = {}
+    for it in items:
+        d = it["timestamp"][:10]
+        by_day.setdefault(d, []).append(it)
+
+    present_days = 0
+    late_days = 0
+    half_days = 0
+    wfh_days = 0
+    total_work_seconds = 0
+    failed_face = 0
+    spoofs = 0
+
+    for d, evts in by_day.items():
+        in_ev = next((x for x in evts if x["type"] == "in" and x.get("accepted")), None)
+        out_ev = next((x for x in reversed(evts) if x["type"] == "out" and x.get("accepted")), None)
+        if in_ev:
+            present_days += 1
+            if in_ev.get("status") == "late":
+                late_days += 1
+            elif in_ev.get("status") == "half_day":
+                half_days += 1
+            if in_ev.get("attendance_type") == "wfh":
+                wfh_days += 1
+        if in_ev and out_ev:
+            try:
+                ci = datetime.fromisoformat(in_ev["timestamp"].replace("Z", "+00:00"))
+                co = datetime.fromisoformat(out_ev["timestamp"].replace("Z", "+00:00"))
+                total_work_seconds += max(0, int((co - ci).total_seconds()))
+            except Exception:
+                pass
+        for e in evts:
+            if e.get("face_passed") is False:
+                failed_face += 1
+            if e.get("spoof_detected"):
+                spoofs += 1
+
+    # Working days so far (Mon-Fri up to today)
+    today = now.date()
+    working_days = 0
+    d = now.replace(day=1).date()
+    while d <= today:
+        if d.weekday() < 5:
+            working_days += 1
+        d = d.replace(day=d.day + 1) if d.day < (today.day if today.month == d.month else 31) else d
+        if d.month != now.month:
+            break
+    pct = round((present_days / working_days) * 100, 1) if working_days else 0
+
+    avg_h = round((total_work_seconds / present_days) / 3600, 1) if present_days else 0
+    return {
+        "month": now.strftime("%B %Y"),
+        "working_days_so_far": working_days,
+        "present_days": present_days,
+        "late_days": late_days,
+        "half_days": half_days,
+        "wfh_days": wfh_days,
+        "absent_days": max(0, working_days - present_days),
+        "attendance_pct": pct,
+        "total_work_hours": round(total_work_seconds / 3600, 1),
+        "avg_work_hours": avg_h,
+        "failed_face_verifications": failed_face,
+        "spoof_attempts": spoofs,
+        "daily": [
+            {
+                "date": d,
+                "check_in": next((x for x in evts if x["type"] == "in" and x.get("accepted")), {}).get("timestamp"),
+                "check_out": next((x for x in reversed(evts) if x["type"] == "out" and x.get("accepted")), {}).get("timestamp"),
+                "status": next((x for x in evts if x["type"] == "in" and x.get("accepted")), {}).get("status") or "absent",
+                "attendance_type": next((x for x in evts if x["type"] == "in" and x.get("accepted")), {}).get("attendance_type"),
+            }
+            for d, evts in sorted(by_day.items())
+        ],
+    }
+
+
+@api.get("/attendance/admin/today")
+async def attendance_admin_today(user: dict = Depends(get_current_user)):
+    """HR/Admin view — see all staff status for today."""
+    if user["role"] not in ("admin", "staff"):
+        raise HTTPException(403, "forbidden")
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    cursor = db.users.find({"role": "staff"}, {"_id": 0, "password": 0})
+    staff = await cursor.to_list(500)
+    out = []
+    present = late = remote = absent = 0
+    for s in staff:
+        att = await db.attendance.find({"user_id": s["id"], "timestamp": {"$gte": today_start}}).sort("timestamp", 1).to_list(50)
+        in_ev = next((x for x in att if x.get("type") == "in" and x.get("accepted")), None)
+        out_ev = next((x for x in reversed(att) if x.get("type") == "out" and x.get("accepted")), None)
+        status = (in_ev or {}).get("status") or "absent"
+        att_type = (in_ev or {}).get("attendance_type") or "—"
+        if status == "absent":
+            absent += 1
+        elif status == "late":
+            late += 1
+            if att_type == "wfh":
+                remote += 1
+            else:
+                present += 1
+        else:
+            present += 1
+            if att_type == "wfh":
+                remote += 1
+        out.append({
+            "id": s["id"],
+            "name": s["name"],
+            "department": s.get("department"),
+            "employee_id": s.get("employee_id"),
+            "status": status,
+            "attendance_type": att_type,
+            "check_in": (in_ev or {}).get("timestamp"),
+            "check_out": (out_ev or {}).get("timestamp"),
+            "geofence_name": (in_ev or {}).get("geofence_name"),
+        })
+    return {
+        "summary": {
+            "total": len(staff),
+            "present": present,
+            "absent": absent,
+            "late": late,
+            "remote": remote,
+        },
+        "staff": out,
+    }
 
 # ---------- LIBRARY ----------
 @api.get("/library/books")
