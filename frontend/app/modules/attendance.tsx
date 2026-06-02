@@ -13,6 +13,7 @@ import { api } from '../../src/api';
 import { useAuth } from '../../src/auth';
 import { colors, radii, shadow, spacing } from '../../src/theme';
 import { Card, Pill, Badge, ScreenHeader, Empty } from '../../src/ui';
+import { ProgressRing, WeekStreak, TodayTimeline } from '../../src/components/AttendanceVisuals';
 
 type AttType = 'office' | 'wfh' | 'client_visit' | 'field';
 const TYPE_META: Record<AttType, { label: string; icon: string }> = {
@@ -187,15 +188,16 @@ const TodayTab = ({
             size={56} color="rgba(255,255,255,0.9)"
           />
         </View>
-
-        <View style={styles.timeRow}>
-          <TimeBlock label="Check-in" value={fmtTime(today?.check_in?.timestamp)} />
-          <View style={styles.timeDivider} />
-          <TimeBlock label="Check-out" value={fmtTime(today?.check_out?.timestamp)} />
-          <View style={styles.timeDivider} />
-          <TimeBlock label="Work" value={`${hours}h`} />
-        </View>
       </LinearGradient>
+
+      {/* Today's Timeline */}
+      <Card style={{ marginTop: spacing.md }}>
+        <TodayTimeline
+          checkIn={today?.check_in?.timestamp}
+          checkOut={today?.check_out?.timestamp}
+          workSeconds={today?.work_seconds}
+        />
+      </Card>
 
       {/* Attendance type selector */}
       {nextAction === 'in' && (
@@ -326,38 +328,119 @@ const HistoryTab = ({ items }: { items: any[] }) => {
     return Object.entries(m).sort((a, b) => (a[0] < b[0] ? 1 : -1));
   }, [items]);
 
+  // Build last-7-day streak strip
+  const weekDays = useMemo(() => {
+    const today = new Date();
+    const days: { date: string; status: any }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const iso = d.toISOString().slice(0, 10);
+      const evts = byDay.find(([k]) => k === iso)?.[1] || [];
+      const inE = evts.find((x: any) => x.type === 'in' && x.accepted);
+      const dow = d.getDay();
+      let status: any = 'absent';
+      if (dow === 0 || dow === 6) status = inE ? (inE.attendance_type === 'wfh' ? 'wfh' : 'present') : 'weekend';
+      else if (inE) {
+        if (inE.attendance_type === 'wfh') status = 'wfh';
+        else if (inE.status === 'late') status = 'late';
+        else status = 'present';
+      }
+      days.push({ date: iso, status });
+    }
+    return days;
+  }, [byDay]);
+
+  // Compute streak
+  const streak = useMemo(() => {
+    let count = 0;
+    for (let i = weekDays.length - 1; i >= 0; i--) {
+      const st = weekDays[i].status;
+      if (st === 'present' || st === 'late' || st === 'wfh') count++;
+      else if (st === 'weekend') continue;
+      else break;
+    }
+    return count;
+  }, [weekDays]);
+
   if (!items.length) return <Empty icon="time-outline" message="No attendance records yet" />;
 
   return (
     <View>
+      {/* Week streak header */}
+      <Card>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <View>
+            <Text style={styles.cardLabel}>THIS WEEK</Text>
+            <Text style={styles.weekTitle}>Your attendance streak</Text>
+          </View>
+          <View style={styles.streakChip}>
+            <MaterialCommunityIcons name="fire" size={16} color="#F97316" />
+            <Text style={styles.streakText}>{streak} day{streak === 1 ? '' : 's'}</Text>
+          </View>
+        </View>
+        <WeekStreak days={weekDays} />
+        <View style={styles.legendRow}>
+          {[
+            { c: '#16A34A', l: 'Present' },
+            { c: '#F59E0B', l: 'Late' },
+            { c: '#3B82F6', l: 'WFH' },
+            { c: '#EF4444', l: 'Absent' },
+          ].map((x) => (
+            <View key={x.l} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: x.c }} />
+              <Text style={styles.legendText}>{x.l}</Text>
+            </View>
+          ))}
+        </View>
+      </Card>
+
+      <View style={{ height: spacing.md }} />
+
       {byDay.map(([day, evts]) => {
         const inE = evts.find((x) => x.type === 'in' && x.accepted);
         const outE = [...evts].reverse().find((x) => x.type === 'out' && x.accepted);
         const stat = inE?.status || 'absent';
         const sm = STATUS_META[stat];
+        const att_type = inE?.attendance_type as AttType | undefined;
+        const dur = (inE && outE)
+          ? ((new Date(outE.timestamp).getTime() - new Date(inE.timestamp).getTime()) / 3600000).toFixed(1)
+          : null;
         return (
           <Card key={day} style={{ marginBottom: spacing.sm }} testID={`day-${day}`}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <View>
-                <Text style={styles.dayLabel}>
-                  {new Date(day + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <View style={[styles.dayBadge, { backgroundColor: `${sm.color}1A` }]}>
+                <Text style={[styles.dayBadgeNum, { color: sm.color }]}>
+                  {new Date(day + 'T00:00:00').getDate()}
                 </Text>
-                <Text style={styles.daySub}>
-                  In: {fmtTime(inE?.timestamp)}  ·  Out: {fmtTime(outE?.timestamp)}
+                <Text style={[styles.dayBadgeMon, { color: sm.color }]}>
+                  {new Date(day + 'T00:00:00').toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}
                 </Text>
               </View>
-              <Badge label={sm.label} color={sm.color} />
-            </View>
-            <View style={styles.eventList}>
-              {evts.map((e, i) => (
-                <View key={i} style={styles.eventRow}>
-                  <View style={[styles.eventDot, { backgroundColor: e.accepted ? colors.success : colors.sos }]} />
-                  <Text style={styles.eventText}>
-                    Check-{e.type} · {fmtTime(e.timestamp)} · {Math.round(e.face_score * 100)}% face
-                    {!e.accepted ? ` · ${labelReason(e.rejection_reason)}` : ''}
-                  </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.dayLabel}>
+                  {new Date(day + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' })}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                  <Ionicons name="log-in-outline" size={11} color={colors.textMuted} />
+                  <Text style={styles.daySub}>{fmtTime(inE?.timestamp)}</Text>
+                  <Text style={styles.daySub}>·</Text>
+                  <Ionicons name="log-out-outline" size={11} color={colors.textMuted} />
+                  <Text style={styles.daySub}>{fmtTime(outE?.timestamp)}</Text>
+                  {dur && (
+                    <>
+                      <Text style={styles.daySub}>·</Text>
+                      <Text style={[styles.daySub, { color: colors.primary, fontWeight: '700' }]}>{dur}h</Text>
+                    </>
+                  )}
                 </View>
-              ))}
+              </View>
+              <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                <Badge label={sm.label} color={sm.color} />
+                {att_type && (
+                  <Text style={styles.attTypeText}>{TYPE_META[att_type]?.label}</Text>
+                )}
+              </View>
             </View>
           </Card>
         );
@@ -379,12 +462,28 @@ const StatsTab = ({ stats }: { stats: any }) => {
     <View>
       <Card>
         <Text style={styles.cardLabel}>{stats.month?.toUpperCase()} · MONTHLY SUMMARY</Text>
-        <Text style={styles.bigPct}>{stats.attendance_pct}%</Text>
-        <Text style={styles.bigPctLabel}>
-          {stats.present_days}/{stats.working_days_so_far} working days
-        </Text>
-        <View style={styles.barTrack2}>
-          <View style={[styles.barFill2, { width: `${Math.min(100, stats.attendance_pct)}%` }]} />
+        <View style={styles.ringWrap}>
+          <ProgressRing
+            value={stats.attendance_pct}
+            label="ATTENDANCE"
+            sub={`${stats.present_days}/${stats.working_days_so_far} working days`}
+          />
+        </View>
+        <View style={styles.ringFooter}>
+          <View style={{ alignItems: 'center', flex: 1 }}>
+            <Text style={styles.ringFootVal}>{stats.total_work_hours}h</Text>
+            <Text style={styles.ringFootLab}>Total Hours</Text>
+          </View>
+          <View style={styles.ringFootDiv} />
+          <View style={{ alignItems: 'center', flex: 1 }}>
+            <Text style={styles.ringFootVal}>{stats.avg_work_hours}h</Text>
+            <Text style={styles.ringFootLab}>Avg / Day</Text>
+          </View>
+          <View style={styles.ringFootDiv} />
+          <View style={{ alignItems: 'center', flex: 1 }}>
+            <Text style={[styles.ringFootVal, { color: '#F59E0B' }]}>{stats.late_days}</Text>
+            <Text style={styles.ringFootLab}>Late Days</Text>
+          </View>
         </View>
       </Card>
 
@@ -813,19 +912,45 @@ const styles = StyleSheet.create({
   },
   fenceName: { fontSize: 13, fontWeight: '700', color: colors.text },
   fenceAddr: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
-  dayLabel: { fontSize: 14, fontWeight: '700', color: colors.text },
-  daySub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  eventList: { marginTop: spacing.sm, gap: 4 },
-  eventRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  eventDot: { width: 6, height: 6, borderRadius: 3 },
-  eventText: { fontSize: 11, color: colors.textSecondary, flex: 1 },
-  bigPct: { fontSize: 40, fontWeight: '800', color: colors.primary, marginTop: 6 },
-  bigPctLabel: { fontSize: 12, color: colors.textSecondary, marginTop: -2 },
-  barTrack2: {
-    height: 8, backgroundColor: colors.border,
-    borderRadius: 4, marginTop: 10, overflow: 'hidden',
+  dayBadge: {
+    width: 52, height: 56, borderRadius: radii.md,
+    alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 4,
   },
-  barFill2: { height: '100%', backgroundColor: colors.primary, borderRadius: 4 },
+  dayBadgeNum: { fontSize: 22, fontWeight: '800', lineHeight: 24 },
+  dayBadgeMon: { fontSize: 9, fontWeight: '800', letterSpacing: 1.2, marginTop: 2 },
+  dayLabel: { fontSize: 14, fontWeight: '700', color: colors.text },
+  daySub: { fontSize: 11, color: colors.textSecondary },
+  attTypeText: { fontSize: 10, color: colors.textMuted, fontWeight: '600' },
+  weekTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginTop: 2 },
+  streakChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#FFEDD5',
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: radii.pill,
+  },
+  streakText: { fontSize: 13, fontWeight: '800', color: '#C2410C' },
+  legendRow: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 12,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1, borderTopColor: colors.border,
+    justifyContent: 'center',
+  },
+  legendText: { fontSize: 10, color: colors.textSecondary, fontWeight: '600' },
+  ringWrap: {
+    alignItems: 'center', justifyContent: 'center',
+    paddingVertical: spacing.md,
+  },
+  ringFooter: {
+    flexDirection: 'row', alignItems: 'center',
+    marginTop: spacing.sm,
+    paddingTop: spacing.md,
+    borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  ringFootDiv: { width: 1, height: 36, backgroundColor: colors.border },
+  ringFootVal: { fontSize: 18, fontWeight: '800', color: colors.text },
+  ringFootLab: { fontSize: 10, color: colors.textMuted, fontWeight: '700', letterSpacing: 1, marginTop: 2 },
   statsGrid: {
     flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm,
     marginTop: spacing.md,

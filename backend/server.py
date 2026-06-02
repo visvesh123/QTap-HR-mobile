@@ -250,6 +250,14 @@ async def _seed_attendance_history():
     staff = await db.users.find({"role": "staff"}, {"_id": 0, "password_hash": 0}).to_list(200)
     if not staff:
         return
+    # 5 demo accounts that should ALWAYS show populated data when the user logs in
+    GUARANTEED_PRESENT = {
+        "faculty@mahindrauniversity.edu.in",
+        "librarian@mahindrauniversity.edu.in",
+        "warden@mahindrauniversity.edu.in",
+        "security@mahindrauniversity.edu.in",
+        "exam@mahindrauniversity.edu.in",
+    }
     fence_pool = [g for g in GEOFENCES if g["type"] != "wfh" and g["active"]]
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     docs = []
@@ -258,11 +266,11 @@ async def _seed_attendance_history():
         is_weekend = d.weekday() >= 5
         for s in staff:
             rng = _r.Random(f"{s['id']}-{d.date().isoformat()}")
-            # Skip weekends or with high probability mark off
-            if is_weekend and rng.random() < 0.85:
+            is_demo = s.get("email") in GUARANTEED_PRESENT
+            # Demo accounts are guaranteed present on weekdays; others probabilistic
+            if is_weekend and rng.random() < (0.5 if is_demo else 0.85):
                 continue
-            # 88% present overall
-            present = rng.random() < (0.6 if is_weekend else 0.92)
+            present = True if is_demo and not is_weekend else (rng.random() < (0.6 if is_weekend else 0.92))
             if not present:
                 continue
             # Decide attendance type
@@ -729,9 +737,7 @@ async def attendance_stats(user: dict = Depends(get_current_user)):
     while d <= today:
         if d.weekday() < 5:
             working_days += 1
-        d = d.replace(day=d.day + 1) if d.day < (today.day if today.month == d.month else 31) else d
-        if d.month != now.month:
-            break
+        d = d + timedelta(days=1)
     pct = round((present_days / working_days) * 100, 1) if working_days else 0
 
     avg_h = round((total_work_seconds / present_days) / 3600, 1) if present_days else 0
