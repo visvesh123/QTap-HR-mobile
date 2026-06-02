@@ -42,6 +42,20 @@ export default function Login() {
 
   const fillDemo = (d: any) => { setEmail(d.email); setPassword(d.password); };
 
+  const oneTapLogin = async (d: any) => {
+    setEmail(d.email);
+    setPassword(d.password);
+    setError(''); setLoading(true);
+    try {
+      await login(d.email, d.password, role);
+      router.replace('/(tabs)');
+    } catch (e: any) {
+      setError(e.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const roleLabel = role === 'student' ? 'Student' : role === 'staff' ? 'Staff' : role === 'admin' ? 'Admin' : 'User';
 
   return (
@@ -116,23 +130,47 @@ export default function Login() {
 
           {demos.length > 0 && (
             <View style={styles.demoBox} testID="demo-accounts">
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.sm }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                 <Ionicons name="flash" size={16} color={colors.gold} />
-                <Text style={styles.demoTitle}>Quick login (demo)</Text>
+                <Text style={styles.demoTitle}>Quick demo login</Text>
               </View>
+              <Text style={styles.demoHint}>
+                Tap any account to instantly sign in — or use the arrow to fill the form only.
+              </Text>
               {demos.map((d) => (
-                <TouchableOpacity
-                  key={d.email}
-                  style={styles.demoChip}
-                  onPress={() => fillDemo(d)}
-                  testID={`demo-${d.email}`}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.demoName}>{d.name}</Text>
-                    <Text style={styles.demoEmail}>{d.email}</Text>
-                  </View>
-                  <Ionicons name="arrow-forward-circle" size={22} color={colors.primary} />
-                </TouchableOpacity>
+                <View key={d.email} style={styles.demoChip} testID={`demo-${d.email}`}>
+                  <TouchableOpacity
+                    onPress={() => oneTapLogin(d)}
+                    style={styles.demoChipMain}
+                    activeOpacity={0.7}
+                    testID={`demo-go-${d.email}`}
+                  >
+                    <View style={styles.demoAvatar}>
+                      <Text style={styles.demoAvatarText}>
+                        {d.name.split(' ').map((p: string) => p[0]).slice(0, 2).join('').toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={styles.demoName}>{d.name}</Text>
+                      <Text style={styles.demoEmail}>{d.email}</Text>
+                      <View style={styles.demoPwRow}>
+                        <Ionicons name="key-outline" size={11} color={colors.textSecondary} />
+                        <Text style={styles.demoPw}>{d.password}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.demoGoBtn}>
+                      <Ionicons name="log-in-outline" size={16} color={colors.white} />
+                      <Text style={styles.demoGoText}>Sign In</Text>
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => fillDemo(d)}
+                    style={styles.demoFillBtn}
+                    testID={`demo-fill-${d.email}`}
+                  >
+                    <Ionicons name="arrow-up-circle-outline" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                </View>
               ))}
             </View>
           )}
@@ -169,11 +207,52 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   demoTitle: { fontSize: 13, fontWeight: '700', color: colors.gold },
+  demoHint: { fontSize: 11, color: colors.textSecondary, marginBottom: spacing.sm, lineHeight: 15 },
   demoChip: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', alignItems: 'stretch',
     backgroundColor: colors.white,
-    borderRadius: radii.md, padding: spacing.sm, marginTop: spacing.sm, gap: 8,
+    borderRadius: radii.md, marginTop: spacing.sm,
+    overflow: 'hidden',
+    borderWidth: 1, borderColor: 'rgba(212,160,23,0.25)',
   },
+  demoChipMain: {
+    flex: 1,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  demoAvatar: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: colors.primaryBg,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  demoAvatarText: { fontSize: 13, fontWeight: '800', color: colors.primary },
   demoName: { fontSize: 13, fontWeight: '700', color: colors.text },
-  demoEmail: { fontSize: 11, color: colors.textSecondary, marginTop: 1 },
+  demoEmail: { fontSize: 11, color: colors.textSecondary },
+  demoPwRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    marginTop: 2,
+  },
+  demoPw: {
+    fontSize: 11, fontWeight: '700',
+    color: colors.textSecondary,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6, paddingVertical: 1,
+    borderRadius: 4,
+  },
+  demoGoBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: radii.pill,
+  },
+  demoGoText: { color: colors.white, fontWeight: '700', fontSize: 11 },
+  demoFillBtn: {
+    width: 36,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#FEF3C7',
+    borderLeftWidth: 1, borderLeftColor: 'rgba(212,160,23,0.25)',
+  },
 });
