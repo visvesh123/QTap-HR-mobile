@@ -140,6 +140,20 @@ SEED_USERS = [
     {"email": "security@mahindrauniversity.edu.in", "password": "security123", "name": "Mr. Ramesh Kale", "role": "staff", "department": "Security", "employee_id": "MU-SEC011"},
     {"email": "exam@mahindrauniversity.edu.in", "password": "exam123", "name": "Dr. Kavita Joshi", "role": "staff", "department": "Examination Cell", "employee_id": "MU-EXM002"},
     {"email": "admin@mahindrauniversity.edu.in", "password": "admin123", "name": "Prof. Suresh Mehta", "role": "admin", "department": "Administration", "employee_id": "MU-ADM001"},
+    # Additional staff (non-demo accounts) to make the HR portal feel realistic
+    {"email": "priya.iyer@mahindrauniversity.edu.in",     "password": "demo123", "name": "Dr. Priya Iyer",       "role": "staff", "department": "Faculty - Computer Science", "employee_id": "MU-FAC1024"},
+    {"email": "arjun.menon@mahindrauniversity.edu.in",    "password": "demo123", "name": "Dr. Arjun Menon",     "role": "staff", "department": "Faculty - ECE",             "employee_id": "MU-FAC2011"},
+    {"email": "neha.kapoor@mahindrauniversity.edu.in",    "password": "demo123", "name": "Prof. Neha Kapoor",   "role": "staff", "department": "Faculty - ECE",             "employee_id": "MU-FAC2012"},
+    {"email": "manish.gupta@mahindrauniversity.edu.in",   "password": "demo123", "name": "Dr. Manish Gupta",    "role": "staff", "department": "Faculty - Mechanical",      "employee_id": "MU-FAC3007"},
+    {"email": "sneha.rao@mahindrauniversity.edu.in",      "password": "demo123", "name": "Prof. Sneha Rao",     "role": "staff", "department": "Faculty - Mechanical",      "employee_id": "MU-FAC3008"},
+    {"email": "kavya.balan@mahindrauniversity.edu.in",    "password": "demo123", "name": "Ms. Kavya Balan",     "role": "staff", "department": "Library",                   "employee_id": "MU-LIB205"},
+    {"email": "ravi.kumar@mahindrauniversity.edu.in",     "password": "demo123", "name": "Mr. Ravi Kumar",      "role": "staff", "department": "IT Helpdesk",               "employee_id": "MU-ITH101"},
+    {"email": "deepa.shetty@mahindrauniversity.edu.in",   "password": "demo123", "name": "Ms. Deepa Shetty",    "role": "staff", "department": "Admissions",               "employee_id": "MU-ADM042"},
+    {"email": "sunil.pillai@mahindrauniversity.edu.in",   "password": "demo123", "name": "Mr. Sunil Pillai",    "role": "staff", "department": "Finance",                   "employee_id": "MU-FIN014"},
+    {"email": "anjali.deshmukh@mahindrauniversity.edu.in","password": "demo123", "name": "Ms. Anjali Deshmukh", "role": "staff", "department": "Hostel",                    "employee_id": "MU-HOS102"},
+    {"email": "rakesh.bhat@mahindrauniversity.edu.in",    "password": "demo123", "name": "Mr. Rakesh Bhat",     "role": "staff", "department": "Security",                  "employee_id": "MU-SEC012"},
+    {"email": "meera.nair@mahindrauniversity.edu.in",     "password": "demo123", "name": "Dr. Meera Nair",      "role": "staff", "department": "Examination Cell",         "employee_id": "MU-EXM003"},
+    {"email": "amit.jain@mahindrauniversity.edu.in",      "password": "demo123", "name": "Dr. Amit Jain",       "role": "staff", "department": "Faculty - Computer Science", "employee_id": "MU-FAC1025"},
 ]
 
 SEED_EVENTS = [
@@ -216,6 +230,109 @@ async def on_startup():
             existing = await db.parcels.find_one({"id": p["id"]})
             if not existing:
                 await db.parcels.insert_one({**p, "user_id": student["id"]})
+
+    # Seed 14 days of synthetic staff attendance (only if collection is empty)
+    if await db.attendance.count_documents({}) == 0:
+        await _seed_attendance_history()
+
+
+@api.post("/admin/seed/reset-attendance")
+async def admin_reset_attendance(user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    await db.attendance.delete_many({})
+    await _seed_attendance_history()
+    return {"ok": True, "records": await db.attendance.count_documents({})}
+
+
+async def _seed_attendance_history():
+    import random as _r
+    staff = await db.users.find({"role": "staff"}, {"_id": 0, "password_hash": 0}).to_list(200)
+    if not staff:
+        return
+    fence_pool = [g for g in GEOFENCES if g["type"] != "wfh" and g["active"]]
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    docs = []
+    for day_offset in range(13, -1, -1):
+        d = today - timedelta(days=day_offset)
+        is_weekend = d.weekday() >= 5
+        for s in staff:
+            rng = _r.Random(f"{s['id']}-{d.date().isoformat()}")
+            # Skip weekends or with high probability mark off
+            if is_weekend and rng.random() < 0.85:
+                continue
+            # 88% present overall
+            present = rng.random() < (0.6 if is_weekend else 0.92)
+            if not present:
+                continue
+            # Decide attendance type
+            r = rng.random()
+            if r < 0.78:
+                att_type = "office"
+            elif r < 0.92:
+                att_type = "wfh"
+            elif r < 0.97:
+                att_type = "client_visit"
+            else:
+                att_type = "field"
+            # Pick geofence
+            if att_type == "wfh":
+                fence = next((g for g in GEOFENCES if g["type"] == "wfh"), None)
+                lat, lon = 17.4 + rng.random() * 0.2, 78.3 + rng.random() * 0.2
+            elif att_type == "client_visit":
+                fence = next((g for g in fence_pool if g["type"] == "client"), fence_pool[0])
+                lat = fence["lat"] + (rng.random() - 0.5) * 0.0008
+                lon = fence["lon"] + (rng.random() - 0.5) * 0.0008
+            else:
+                # Main campus most of the time
+                fence = fence_pool[0] if rng.random() < 0.85 else rng.choice(fence_pool)
+                lat = fence["lat"] + (rng.random() - 0.5) * 0.001
+                lon = fence["lon"] + (rng.random() - 0.5) * 0.001
+            # Check-in time around 09:15 ± 90 min with some lateness
+            base_min = rng.randint(8 * 60 + 30, 9 * 60 + 50)
+            jitter = rng.randint(-25, 25)
+            in_min = base_min + jitter
+            # 12% late
+            if rng.random() < 0.12:
+                in_min = max(in_min, 9 * 60 + 35) + rng.randint(0, 60)
+            ci = d + timedelta(minutes=in_min)
+            # Check-out 7.5-9.5 hours later
+            out_min = in_min + rng.randint(7 * 60 + 30, 9 * 60 + 30)
+            co = d + timedelta(minutes=out_min)
+            face_score = round(rng.uniform(0.88, 0.99), 3)
+            status = "present"
+            if (in_min // 60) > 9 or (in_min // 60 == 9 and in_min % 60 > 30):
+                status = "late"
+            if in_min > 12 * 60:
+                status = "half_day"
+            for ev_type, ts in (("in", ci), ("out", co)):
+                docs.append({
+                    "id": str(uuid.uuid4()),
+                    "user_id": s["id"],
+                    "name": s["name"],
+                    "department": s.get("department"),
+                    "type": ev_type,
+                    "attendance_type": att_type,
+                    "lat": lat,
+                    "lon": lon,
+                    "accuracy_m": rng.randint(5, 18),
+                    "is_mock_location": False,
+                    "distance_m": rng.randint(20, 250) if fence and fence["type"] != "wfh" else 0,
+                    "geofence_id": fence["id"] if fence else None,
+                    "geofence_name": fence["name"] if fence else None,
+                    "inside_geofence": True,
+                    "face_score": face_score,
+                    "face_passed": True,
+                    "spoof_detected": False,
+                    "accepted": True,
+                    "rejection_reason": None,
+                    "status": status if ev_type == "in" else None,
+                    "timestamp": ts.isoformat(),
+                    "on_campus": True,
+                })
+    if docs:
+        await db.attendance.insert_many(docs)
+        logging.info(f"Seeded {len(docs)} attendance records for {len(staff)} staff over 14 days.")
 
 # ---------- AUTH ----------
 @api.get("/")
@@ -372,6 +489,36 @@ GEOFENCES = [
         "radius_m": 0,
         "type": "wfh",
         "active": True,
+    },
+    {
+        "id": "mu-research-park",
+        "name": "MU Research Park — Genome Valley",
+        "address": "Turkapally, Genome Valley, Hyderabad",
+        "lat": 17.5430,
+        "lon": 78.4071,
+        "radius_m": 300,
+        "type": "branch",
+        "active": True,
+    },
+    {
+        "id": "mu-client-msft",
+        "name": "Microsoft Hyderabad — Client Site",
+        "address": "Gachibowli IT Hub, Hyderabad",
+        "lat": 17.4399,
+        "lon": 78.3489,
+        "radius_m": 150,
+        "type": "client",
+        "active": True,
+    },
+    {
+        "id": "mu-secunderabad",
+        "name": "MU Outreach Center — Secunderabad",
+        "address": "SP Road, Secunderabad",
+        "lat": 17.4399,
+        "lon": 78.4983,
+        "radius_m": 200,
+        "type": "office",
+        "active": False,
     },
 ]
 
