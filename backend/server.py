@@ -896,6 +896,160 @@ async def admin_dashboard(user: dict = Depends(get_current_user)):
         "event_registrations": await db.event_registrations.count_documents({}),
     }
 
+
+# ---------- ADMIN: EMPLOYEES ----------
+@api.get("/admin/employees")
+async def admin_employees(user: dict = Depends(get_current_user), q: Optional[str] = None, role: Optional[str] = None, department: Optional[str] = None):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    qry: dict = {}
+    if role:
+        qry["role"] = role
+    if department:
+        qry["department"] = department
+    if q:
+        rx = {"$regex": q, "$options": "i"}
+        qry["$or"] = [{"name": rx}, {"email": rx}, {"employee_id": rx}, {"student_id": rx}]
+    cursor = db.users.find(qry, {"_id": 0, "password": 0}).sort("name", 1)
+    return await cursor.to_list(500)
+
+
+# ---------- ADMIN: ATTENDANCE TREND (last 14 days) ----------
+@api.get("/admin/attendance/trend")
+async def admin_attendance_trend(user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    out = []
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    total_staff = await db.users.count_documents({"role": "staff"})
+    for i in range(13, -1, -1):
+        d = today - timedelta(days=i)
+        d_iso = d.isoformat()
+        d_next = (d + timedelta(days=1)).isoformat()
+        pipeline = [
+            {"$match": {"timestamp": {"$gte": d_iso, "$lt": d_next}, "type": "in", "accepted": True}},
+            {"$group": {"_id": "$user_id"}},
+        ]
+        users = await db.attendance.aggregate(pipeline).to_list(2000)
+        present = len(users)
+        out.append({
+            "date": d.strftime("%Y-%m-%d"),
+            "label": d.strftime("%a %d"),
+            "present": present,
+            "absent": max(0, total_staff - present),
+            "total": total_staff,
+        })
+    return out
+
+
+# ---------- ADMIN: DEPARTMENT BREAKDOWN ----------
+@api.get("/admin/attendance/by-department")
+async def admin_attendance_by_dept(user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    pipeline_total = [{"$match": {"role": "staff"}}, {"$group": {"_id": "$department", "count": {"$sum": 1}}}]
+    totals = {d["_id"] or "Unassigned": d["count"] for d in await db.users.aggregate(pipeline_total).to_list(100)}
+    pipeline_present = [
+        {"$match": {"timestamp": {"$gte": today_start}, "type": "in", "accepted": True}},
+        {"$group": {"_id": {"u": "$user_id", "d": "$department"}}},
+        {"$group": {"_id": "$_id.d", "count": {"$sum": 1}}},
+    ]
+    present = {d["_id"] or "Unassigned": d["count"] for d in await db.attendance.aggregate(pipeline_present).to_list(100)}
+    out = []
+    for dept, tot in totals.items():
+        p = present.get(dept, 0)
+        out.append({
+            "department": dept,
+            "total": tot,
+            "present": p,
+            "absent": max(0, tot - p),
+            "pct": round((p / tot) * 100, 1) if tot else 0,
+        })
+    return sorted(out, key=lambda x: -x["pct"])
+
+
+# ---------- ADMIN: GEOFENCE CRUD (in-memory for demo) ----------
+class GeofenceBody(BaseModel):
+    name: str
+    address: Optional[str] = ""
+    lat: float
+    lon: float
+    radius_m: int = 200
+    type: str = "office"  # office | branch | wfh | client
+    active: bool = True
+
+
+@api.post("/admin/geofences")
+async def admin_create_geofence(body: GeofenceBody, user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    g = body.dict()
+    g["id"] = f"fence-{uuid.uuid4().hex[:8]}"
+    GEOFENCES.append(g)
+    return g
+
+
+@api.put("/admin/geofences/{fid}")
+async def admin_update_geofence(fid: str, body: GeofenceBody, user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    for g in GEOFENCES:
+        if g["id"] == fid:
+            g.update(body.dict())
+            return g
+    raise HTTPException(404, "Not found")
+
+
+@api.delete("/admin/geofences/{fid}")
+async def admin_delete_geofence(fid: str, user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    global GEOFENCES
+    before = len(GEOFENCES)
+    GEOFENCES = [g for g in GEOFENCES if g["id"] != fid]
+    if len(GEOFENCES) == before:
+        raise HTTPException(404, "Not found")
+    return {"deleted": True}
+
+
+# ---------- ADMIN: REPORTS ----------
+@api.get("/admin/reports/monthly")
+async def admin_monthly_report(user: dict = Depends(get_current_user), month: Optional[str] = None):
+    """month format: YYYY-MM. Defaults to current month."""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    now = datetime.now(timezone.utc)
+    if month:
+        try:
+            y, m = month.split("-")
+            start = datetime(int(y), int(m), 1, tzinfo=timezone.utc)
+        except Exception:
+            start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    next_m = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    cursor = db.attendance.find(
+        {"timestamp": {"$gte": start.isoformat(), "$lt": next_m.isoformat()}, "type": "in", "accepted": True},
+        {"_id": 0},
+    )
+    items = await cursor.to_list(20000)
+    # group by user
+    by_user: dict = {}
+    for it in items:
+        u = it["user_id"]
+        by_user.setdefault(u, {"name": it.get("name"), "department": it.get("department"), "present": 0, "late": 0, "wfh": 0})
+        by_user[u]["present"] += 1
+        if it.get("status") == "late":
+            by_user[u]["late"] += 1
+        if it.get("attendance_type") == "wfh":
+            by_user[u]["wfh"] += 1
+    return {
+        "month": start.strftime("%B %Y"),
+        "start": start.isoformat(),
+        "rows": [{"user_id": u, **v} for u, v in by_user.items()],
+    }
+
 # ---------- mess capacity (live simulated) ----------
 import math
 import random as _rand

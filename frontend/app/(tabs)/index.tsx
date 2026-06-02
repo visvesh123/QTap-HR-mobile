@@ -133,14 +133,23 @@ export default function Home() {
                   <Stat label="Staff" value={stats.total_staff} />
                   <Stat label="Active SOS" value={stats.active_sos} color={colors.sos} />
                 </View>
-                <TouchableOpacity
-                  onPress={() => router.push('/modules/admin')}
-                  style={styles.welcomeBtn}
-                  testID="open-admin-btn"
-                >
-                  <Text style={styles.welcomeBtnText}>Open Console</Text>
-                  <Ionicons name="arrow-forward" size={16} color={colors.white} />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: spacing.md }}>
+                  <TouchableOpacity
+                    onPress={() => router.push('/admin')}
+                    style={styles.welcomeBtn}
+                    testID="open-web-portal"
+                  >
+                    <MaterialCommunityIcons name="monitor-dashboard" size={16} color={colors.white} />
+                    <Text style={styles.welcomeBtnText}>Open HR Portal</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => router.push('/modules/admin')}
+                    style={[styles.welcomeBtn, { backgroundColor: 'rgba(255,255,255,0.2)' }]}
+                    testID="open-admin-btn"
+                  >
+                    <Text style={styles.welcomeBtnText}>Mobile Console</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </Card>
           )}

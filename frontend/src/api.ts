@@ -96,6 +96,16 @@ export const api = {
 
   // admin
   adminDashboard: () => request<any>('GET', '/admin/dashboard'),
+  adminEmployees: (params?: { q?: string; role?: string; department?: string }) => {
+    const q = params ? Object.entries(params).filter(([_, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v as string)}`).join('&') : '';
+    return request<any[]>('GET', `/admin/employees${q ? `?${q}` : ''}`);
+  },
+  adminAttendanceTrend: () => request<any[]>('GET', '/admin/attendance/trend'),
+  adminAttendanceByDept: () => request<any[]>('GET', '/admin/attendance/by-department'),
+  adminCreateGeofence: (data: any) => request<any>('POST', '/admin/geofences', data),
+  adminUpdateGeofence: (id: string, data: any) => request<any>('PUT', `/admin/geofences/${id}`, data),
+  adminDeleteGeofence: (id: string) => request<any>('DELETE', `/admin/geofences/${id}`),
+  adminMonthlyReport: (month?: string) => request<any>('GET', `/admin/reports/monthly${month ? `?month=${month}` : ''}`),
 
   // mess
   messList: (demo?: string) => request<any>('GET', `/mess/list${demo ? `?demo=${demo}` : ''}`),
