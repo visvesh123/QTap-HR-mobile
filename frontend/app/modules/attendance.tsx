@@ -579,6 +579,7 @@ const SummaryCard = ({ label, value, color, icon }: any) => (
 
 // ---------- CAPTURE FLOW (modal) ----------
 type CaptureStep = 'permissions' | 'camera' | 'verifying' | 'result';
+type DemoOutcome = 'success' | 'low_confidence' | 'spoof';
 
 const CaptureFlow = ({
   kind, attType, demoMode, demoInsideFence, onDone, onClose,
@@ -594,12 +595,12 @@ const CaptureFlow = ({
   const [permission, requestPermission] = useCameraPermissions();
   const [selfieUri, setSelfieUri] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
+  const [demoOutcome, setDemoOutcome] = useState<DemoOutcome>('success');
   const camRef = useRef<any>(null);
 
   useEffect(() => {
     (async () => {
       if (Platform.OS === 'web') {
-        // Skip camera permission flow on web — use placeholder selfie
         setStep('camera');
         return;
       }
@@ -614,7 +615,6 @@ const CaptureFlow = ({
 
   const snap = async () => {
     if (Platform.OS === 'web') {
-      // mock selfie on web
       setSelfieUri('placeholder');
       setTimeout(() => verify(null), 200);
       return;
@@ -631,15 +631,13 @@ const CaptureFlow = ({
   const verify = async (b64: string | null) => {
     setStep('verifying');
     try {
-      // Get GPS
       let lat = MU_LAT, lon = MU_LON, accuracy = 8, mock = false;
       if (demoMode) {
         if (demoInsideFence) {
-          lat = MU_LAT + (Math.random() - 0.5) * 0.001; // ~50m jitter
+          lat = MU_LAT + (Math.random() - 0.5) * 0.001;
           lon = MU_LON + (Math.random() - 0.5) * 0.001;
         } else {
-          lat = 17.43; // ~10km away
-          lon = 78.50;
+          lat = 17.43; lon = 78.50;
         }
       } else if (Platform.OS !== 'web') {
         try {
@@ -649,7 +647,7 @@ const CaptureFlow = ({
             lat = loc.coords.latitude;
             lon = loc.coords.longitude;
             accuracy = loc.coords.accuracy || 8;
-            // @ts-ignore — mocked field on some devices
+            // @ts-ignore
             mock = !!loc.mocked;
           }
         } catch {}
@@ -660,15 +658,22 @@ const CaptureFlow = ({
         accuracy_m: accuracy,
         type: kind,
         attendance_type: attType,
-        selfie_b64: b64 ? 'b64-' + (b64?.length || 1) : 'placeholder', // we don't ship the real bytes for size
+        selfie_b64: b64 ? 'b64-' + (b64?.length || 1) : 'placeholder',
         is_mock_location: mock,
+        demo_face_outcome: demoMode ? demoOutcome : null,
       });
-      // Give a short "scanning" animation feel
-      setTimeout(() => { setResult(res); setStep('result'); }, 1100);
+      // Cinematic delay so scan animation can play
+      setTimeout(() => { setResult(res); setStep('result'); }, 2600);
     } catch (e: any) {
       setResult({ accepted: false, rejection_reason: 'network_error', message: e?.message });
       setStep('result');
     }
+  };
+
+  const retry = () => {
+    setResult(null);
+    setSelfieUri(null);
+    setStep('camera');
   };
 
   return (
@@ -676,11 +681,17 @@ const CaptureFlow = ({
       <View style={styles.modalRoot}>
         <View style={styles.modalCard}>
           <View style={styles.modalHead}>
-            <Text style={styles.modalTitle}>
-              {kind === 'in' ? 'Check In' : 'Check Out'}
-            </Text>
-            <TouchableOpacity onPress={onClose} testID="capture-close">
-              <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.modalKicker}>STEP {step === 'camera' ? '1 of 2' : step === 'verifying' ? '2 of 2' : step === 'result' ? '✓ Done' : '…'}</Text>
+              <Text style={styles.modalTitle}>
+                {step === 'camera' ? `Selfie for Check-${kind}` :
+                 step === 'verifying' ? 'Verifying you…' :
+                 step === 'result' ? (result?.accepted ? 'Verified ✓' : 'Verification failed') :
+                 'Preparing…'}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} testID="capture-close" style={styles.modalCloseX}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -695,20 +706,58 @@ const CaptureFlow = ({
             <View>
               <View style={styles.cameraWrap}>
                 {Platform.OS === 'web' || !permission?.granted ? (
-                  <View style={[styles.cameraFallback]}>
-                    <MaterialCommunityIcons name="face-recognition" size={64} color={colors.primary} />
-                    <Text style={styles.captureMsg}>
-                      Selfie capture preview{'\n'}(camera unavailable in web preview)
-                    </Text>
+                  <View style={styles.cameraFallback}>
+                    {/* Animated demo avatar */}
+                    <DemoFaceAvatar />
                   </View>
                 ) : (
                   <CameraView ref={camRef} style={styles.camera} facing="front" />
                 )}
                 <View style={styles.faceFrame} />
+                <View style={styles.faceFrameCorners}>
+                  <View style={[styles.cornerTL]} />
+                  <View style={[styles.cornerTR]} />
+                  <View style={[styles.cornerBL]} />
+                  <View style={[styles.cornerBR]} />
+                </View>
               </View>
               <Text style={styles.captureHint}>
                 Center your face in the frame & ensure good lighting.
               </Text>
+
+              {demoMode && (
+                <View style={styles.demoOutcomeBox}>
+                  <Text style={styles.demoOutcomeLabel}>DEMO · FACE OUTCOME</Text>
+                  <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+                    {[
+                      { id: 'success', label: 'Success', color: '#16A34A', icon: 'check-circle' },
+                      { id: 'low_confidence', label: 'Low Match', color: '#F59E0B', icon: 'alert-circle' },
+                      { id: 'spoof', label: 'Spoof', color: '#DC2626', icon: 'shield-alert' },
+                    ].map((o) => {
+                      const active = demoOutcome === o.id;
+                      return (
+                        <TouchableOpacity
+                          key={o.id}
+                          onPress={() => setDemoOutcome(o.id as DemoOutcome)}
+                          style={[
+                            styles.demoOutcomeChip,
+                            active && { backgroundColor: o.color, borderColor: o.color },
+                          ]}
+                          testID={`outcome-${o.id}`}
+                        >
+                          <MaterialCommunityIcons name={o.icon as any} size={14} color={active ? colors.white : o.color} />
+                          <Text style={[
+                            styles.demoOutcomeText,
+                            active && { color: colors.white },
+                            !active && { color: o.color },
+                          ]}>{o.label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
               <TouchableOpacity activeOpacity={0.85} onPress={snap} style={styles.snapBtn} testID="snap-btn">
                 <MaterialCommunityIcons name="camera-iris" size={22} color="#FFFFFF" />
                 <Text style={styles.snapText}>Capture & Verify</Text>
@@ -719,7 +768,7 @@ const CaptureFlow = ({
           {step === 'verifying' && <VerifyingView selfieUri={selfieUri} />}
 
           {step === 'result' && result && (
-            <ResultView result={result} kind={kind} onDone={onDone} />
+            <ResultView result={result} kind={kind} selfieUri={selfieUri} onDone={onDone} onRetry={retry} />
           )}
         </View>
       </View>
@@ -727,88 +776,215 @@ const CaptureFlow = ({
   );
 };
 
-const VerifyingView = ({ selfieUri }: { selfieUri: string | null }) => {
+const DemoFaceAvatar = () => {
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.loop(
-      Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1, duration: 1800, easing: Easing.linear, useNativeDriver: true }),
     ).start();
   }, []);
-  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
-  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] });
-
+  const scale = pulse.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.12, 1] });
   return (
-    <View style={styles.center}>
-      <View style={styles.verifyImgWrap}>
-        {selfieUri && selfieUri !== 'placeholder' ? (
-          <Image source={{ uri: selfieUri }} style={styles.verifyImg} />
-        ) : (
-          <View style={[styles.verifyImg, { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primaryBg }]}>
-            <MaterialCommunityIcons name="face-recognition" size={48} color={colors.primary} />
-          </View>
-        )}
-        <Animated.View style={[styles.verifyPulse, { transform: [{ scale }], opacity }]} />
-      </View>
-      <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.md }} />
-      <Text style={styles.captureMsg}>Verifying face & location…</Text>
-      <Text style={styles.captureSub}>Anti-spoof scan · GPS check · Face match</Text>
+    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View style={[styles.demoFaceCircle, { transform: [{ scale }] }]}>
+        <MaterialCommunityIcons name="face-man-outline" size={90} color="#FFFFFF" />
+      </Animated.View>
+      <Text style={[styles.captureMsg, { color: 'rgba(255,255,255,0.85)' }]}>
+        Demo selfie preview{'\n'}(open on phone for live camera)
+      </Text>
     </View>
   );
 };
 
-const ResultView = ({ result, kind, onDone }: { result: any; kind: 'in' | 'out'; onDone: () => void }) => {
-  const ok = !!result.accepted;
-  const fScore = Math.round((result.face_score || 0) * 100);
+const VerifyingView = ({ selfieUri }: { selfieUri: string | null }) => {
+  const scanY = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(scanY, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+    ).start();
+    Animated.loop(
+      Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }),
+    ).start();
+  }, []);
+
+  const scanTranslate = scanY.interpolate({ inputRange: [0, 0.5, 1], outputRange: [-90, 90, -90] });
+  const pulseScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] });
+  const pulseOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
+
+  const checklist = [
+    { icon: 'face-recognition',  label: 'Detecting facial landmarks',  delay: 0 },
+    { icon: 'magnify-scan',      label: 'Computing match score',       delay: 800 },
+    { icon: 'shield-search',     label: 'Anti-spoof verification',     delay: 1500 },
+    { icon: 'map-marker-radius', label: 'GPS geofence check',          delay: 2100 },
+  ];
+
   return (
-    <View>
-      <View style={[styles.resultBadge, { backgroundColor: ok ? '#DCFCE7' : '#FEE2E2' }]}>
-        <Ionicons name={ok ? 'checkmark-circle' : 'close-circle'} size={56} color={ok ? '#16A34A' : '#DC2626'} />
-        <Text style={[styles.resultTitle, { color: ok ? '#15803D' : '#991B1B' }]}>
-          {ok
-            ? `Check-${kind} recorded ✓`
-            : labelReason(result.rejection_reason) + ' ✕'}
-        </Text>
-        {result.status && ok && (
-          <Badge label={STATUS_META[result.status]?.label || result.status} color={STATUS_META[result.status]?.color || colors.text} />
-        )}
+    <View style={{ alignItems: 'center' }}>
+      <View style={styles.verifyImgWrap}>
+        <Animated.View style={[styles.verifyPulse, { transform: [{ scale: pulseScale }], opacity: pulseOpacity }]} />
+        <View style={styles.verifyImgInner}>
+          {selfieUri && selfieUri !== 'placeholder' ? (
+            <Image source={{ uri: selfieUri }} style={styles.verifyImg} />
+          ) : (
+            <View style={[styles.verifyImg, styles.demoFacePlaceholder]}>
+              <MaterialCommunityIcons name="face-man-outline" size={80} color="#FFFFFF" />
+            </View>
+          )}
+          {/* Scan line */}
+          <Animated.View
+            style={[
+              styles.scanLine,
+              { transform: [{ translateY: scanTranslate }] },
+            ]}
+          >
+            <LinearGradient
+              colors={['transparent', colors.primary, '#FF4D6D', 'transparent']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={{ flex: 1 }}
+            />
+          </Animated.View>
+          {/* Landmark dots */}
+          {[[35, 40], [85, 40], [60, 65], [40, 90], [80, 90]].map((p, i) => (
+            <FaceDot key={i} cx={p[0]} cy={p[1]} delay={i * 180} />
+          ))}
+        </View>
       </View>
 
+      <View style={styles.checklistBox}>
+        {checklist.map((c, i) => <ChecklistRow key={i} {...c} />)}
+      </View>
+    </View>
+  );
+};
+
+const FaceDot = ({ cx, cy, delay }: { cx: number; cy: number; delay: number }) => {
+  const op = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(op, { toValue: 1, duration: 350, useNativeDriver: true }),
+        Animated.timing(op, { toValue: 0, duration: 450, useNativeDriver: true }),
+        Animated.delay(800),
+      ]),
+    ).start();
+  }, []);
+  return (
+    <Animated.View
+      style={{
+        position: 'absolute',
+        left: `${cx}%`,
+        top: `${cy}%`,
+        width: 8, height: 8, borderRadius: 4,
+        backgroundColor: '#22D3EE',
+        opacity: op,
+        transform: [{ translateX: -4 }, { translateY: -4 }],
+        shadowColor: '#22D3EE',
+        shadowOpacity: 0.8,
+        shadowRadius: 6,
+      }}
+    />
+  );
+};
+
+const ChecklistRow = ({ icon, label, delay }: { icon: string; label: string; delay: number }) => {
+  const op = useRef(new Animated.Value(0)).current;
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(delay),
+      Animated.timing(op, { toValue: 1, duration: 400, useNativeDriver: true }),
+    ]).start();
+    const t = setTimeout(() => setDone(true), delay + 700);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <Animated.View style={[styles.checkRow, { opacity: op }]}>
+      <View style={[styles.checkIcon, done && { backgroundColor: '#DCFCE7' }]}>
+        {done ? (
+          <Ionicons name="checkmark" size={14} color="#16A34A" />
+        ) : (
+          <ActivityIndicator size="small" color={colors.primary} />
+        )}
+      </View>
+      <Text style={[styles.checkText, done && { color: colors.text, fontWeight: '700' }]}>{label}</Text>
+      {done && <MaterialCommunityIcons name={icon as any} size={16} color={colors.textMuted} />}
+    </Animated.View>
+  );
+};
+
+const ResultView = ({ result, kind, selfieUri, onDone, onRetry }: {
+  result: any; kind: 'in' | 'out'; selfieUri: string | null; onDone: () => void; onRetry: () => void;
+}) => {
+  const ok = !!result.accepted;
+  const fScore = Math.round((result.face_score || 0) * 100);
+  const scale = useRef(new Animated.Value(0.4)).current;
+  useEffect(() => {
+    Animated.spring(scale, { toValue: 1, friction: 4, tension: 80, useNativeDriver: true }).start();
+  }, []);
+
+  return (
+    <View>
+      <Animated.View style={[
+        styles.resultBadge,
+        { backgroundColor: ok ? '#DCFCE7' : '#FEE2E2', transform: [{ scale }] },
+      ]}>
+        <View style={styles.resultSelfieWrap}>
+          {selfieUri && selfieUri !== 'placeholder' ? (
+            <Image source={{ uri: selfieUri }} style={styles.resultSelfie} />
+          ) : (
+            <View style={[styles.resultSelfie, styles.demoFacePlaceholder]}>
+              <MaterialCommunityIcons name="face-man-outline" size={48} color="#FFFFFF" />
+            </View>
+          )}
+          <View style={[styles.resultIconBadge, { backgroundColor: ok ? '#16A34A' : '#DC2626' }]}>
+            <Ionicons name={ok ? 'checkmark' : 'close'} size={20} color="#FFFFFF" />
+          </View>
+        </View>
+        <Text style={[styles.resultTitle, { color: ok ? '#15803D' : '#991B1B' }]}>
+          {ok ? `Check-${kind} recorded` : labelReason(result.rejection_reason)}
+        </Text>
+        {ok && result.status && (
+          <Badge label={STATUS_META[result.status]?.label || result.status} color={STATUS_META[result.status]?.color || colors.text} />
+        )}
+        {ok && (
+          <Text style={styles.resultTime}>
+            {new Date(result.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {' · '}
+            {new Date(result.timestamp).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
+          </Text>
+        )}
+      </Animated.View>
+
       <View style={styles.resultRows}>
-        <ResultRow
-          icon="face-recognition"
-          label="Face match"
-          value={`${fScore}%`}
-          ok={result.face_passed}
-        />
+        <ResultRow icon="face-recognition" label="Face match" value={`${fScore}%`} ok={result.face_passed} />
         <ResultRow
           icon="map-marker-radius"
           label="Location"
           value={
             result.inside_geofence
-              ? (result.geofence_name || 'Authorized location')
+              ? (result.geofence_name || 'Authorized')
               : (typeof result.distance_m === 'number'
                   ? `${(result.distance_m / 1000).toFixed(2)}km off`
                   : (result.rejection_reason === 'network_error' ? 'Cannot verify' : 'Out of range'))
           }
           ok={result.inside_geofence}
         />
-        <ResultRow
-          icon="shield-check-outline"
-          label="Anti-spoof"
-          value={result.spoof_detected ? 'Spoof detected' : 'Live person'}
-          ok={!result.spoof_detected}
-        />
-        <ResultRow
-          icon="cellphone-marker"
-          label="Mock location"
-          value={result.is_mock_location ? 'Detected!' : 'Not detected'}
-          ok={!result.is_mock_location}
-        />
+        <ResultRow icon="shield-check-outline" label="Anti-spoof" value={result.spoof_detected ? 'Spoof detected' : 'Live person'} ok={!result.spoof_detected} />
+        <ResultRow icon="cellphone-marker" label="Mock location" value={result.is_mock_location ? 'Detected!' : 'Not detected'} ok={!result.is_mock_location} />
       </View>
 
-      <TouchableOpacity activeOpacity={0.85} onPress={onDone} style={styles.doneBtn} testID="result-done">
-        <Text style={styles.doneText}>Done</Text>
-      </TouchableOpacity>
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: spacing.md }}>
+        {!ok && (
+          <TouchableOpacity activeOpacity={0.85} onPress={onRetry} style={[styles.doneBtn, { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.primary, flex: 1 }]} testID="result-retry">
+            <Text style={[styles.doneText, { color: colors.primary }]}>Try Again</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity activeOpacity={0.85} onPress={onDone} style={[styles.doneBtn, { flex: 1 }]} testID="result-done">
+          <Text style={styles.doneText}>{ok ? 'Done' : 'Close'}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -997,7 +1173,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     marginBottom: spacing.md,
   },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
+  modalKicker: { fontSize: 10, fontWeight: '800', letterSpacing: 1.4, color: colors.textMuted },
+  modalTitle: { fontSize: 19, fontWeight: '800', color: colors.text, marginTop: 2 },
+  modalCloseX: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center',
+  },
   center: { alignItems: 'center', paddingVertical: spacing.xl },
   captureMsg: { color: colors.textSecondary, marginTop: 10, textAlign: 'center', fontSize: 13 },
   captureSub: { color: colors.textMuted, marginTop: 4, fontSize: 11 },
@@ -1009,14 +1190,49 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   camera: { flex: 1 },
-  cameraFallback: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F172A' },
+  cameraFallback: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#0F172A',
+  },
+  demoFaceCircle: {
+    width: 140, height: 140, borderRadius: 70,
+    backgroundColor: 'rgba(227,24,55,0.6)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 3, borderColor: 'rgba(255,255,255,0.4)',
+  },
   faceFrame: {
     position: 'absolute',
     top: '12%', left: '15%', right: '15%', bottom: '20%',
     borderWidth: 3, borderColor: 'rgba(255,255,255,0.7)',
     borderRadius: 999,
   },
+  faceFrameCorners: {
+    position: 'absolute',
+    top: 14, left: 14, right: 14, bottom: 14,
+  },
+  cornerTL: { position: 'absolute', top: 0, left: 0, width: 26, height: 26, borderTopWidth: 4, borderLeftWidth: 4, borderColor: colors.primary, borderTopLeftRadius: 4 },
+  cornerTR: { position: 'absolute', top: 0, right: 0, width: 26, height: 26, borderTopWidth: 4, borderRightWidth: 4, borderColor: colors.primary, borderTopRightRadius: 4 },
+  cornerBL: { position: 'absolute', bottom: 0, left: 0, width: 26, height: 26, borderBottomWidth: 4, borderLeftWidth: 4, borderColor: colors.primary, borderBottomLeftRadius: 4 },
+  cornerBR: { position: 'absolute', bottom: 0, right: 0, width: 26, height: 26, borderBottomWidth: 4, borderRightWidth: 4, borderColor: colors.primary, borderBottomRightRadius: 4 },
   captureHint: { fontSize: 12, color: colors.textSecondary, marginTop: spacing.sm, textAlign: 'center' },
+
+  demoOutcomeBox: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  demoOutcomeLabel: {
+    fontSize: 10, fontWeight: '800', letterSpacing: 1.3, color: colors.textMuted,
+  },
+  demoOutcomeChip: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
+    paddingVertical: 8, borderRadius: radii.md,
+    backgroundColor: colors.background,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  demoOutcomeText: { fontSize: 11, fontWeight: '800' },
+
   snapBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 8, backgroundColor: colors.primary,
@@ -1025,17 +1241,69 @@ const styles = StyleSheet.create({
   },
   snapText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
 
-  verifyImgWrap: { width: 120, height: 120, borderRadius: 60, position: 'relative' },
-  verifyImg: { width: 120, height: 120, borderRadius: 60, borderWidth: 4, borderColor: colors.primary },
-  verifyPulse: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    borderRadius: 60, borderWidth: 3, borderColor: colors.primary,
+  verifyImgWrap: {
+    width: 180, height: 180, alignItems: 'center', justifyContent: 'center',
+    marginTop: spacing.md,
   },
+  verifyImgInner: {
+    width: 160, height: 160, borderRadius: 80,
+    borderWidth: 4, borderColor: colors.primary,
+    overflow: 'hidden', position: 'relative',
+    backgroundColor: '#000',
+  },
+  verifyImg: { width: '100%', height: '100%' },
+  demoFacePlaceholder: {
+    backgroundColor: 'rgba(227,24,55,0.6)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  verifyPulse: {
+    position: 'absolute',
+    width: 180, height: 180, borderRadius: 90,
+    borderWidth: 3, borderColor: colors.primary,
+  },
+  scanLine: {
+    position: 'absolute',
+    left: 0, right: 0,
+    height: 4,
+    top: '50%',
+  },
+  checklistBox: {
+    marginTop: spacing.lg,
+    width: '100%',
+    backgroundColor: colors.background,
+    padding: spacing.md,
+    borderRadius: radii.lg,
+    gap: 8,
+  },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  checkIcon: {
+    width: 22, height: 22, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  checkText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600', flex: 1 },
+
   resultBadge: {
     alignItems: 'center', padding: spacing.md, borderRadius: radii.lg,
-    gap: 6,
+    gap: 8,
   },
-  resultTitle: { fontSize: 17, fontWeight: '800', marginTop: 4 },
+  resultSelfieWrap: {
+    width: 100, height: 100, borderRadius: 50,
+    position: 'relative',
+  },
+  resultSelfie: {
+    width: 100, height: 100, borderRadius: 50,
+    borderWidth: 4, borderColor: '#FFFFFF',
+  },
+  resultIconBadge: {
+    position: 'absolute',
+    right: -4, bottom: -4,
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 3, borderColor: '#FFFFFF',
+  },
+  resultTitle: { fontSize: 17, fontWeight: '800', marginTop: 6 },
+  resultTime: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
   resultRows: { marginTop: spacing.md, gap: 4 },
   resRow: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
@@ -1047,7 +1315,7 @@ const styles = StyleSheet.create({
   doneBtn: {
     backgroundColor: colors.primary,
     padding: 14, borderRadius: radii.md,
-    marginTop: spacing.md, alignItems: 'center',
+    alignItems: 'center',
   },
   doneText: { color: '#FFFFFF', fontWeight: '800' },
 });

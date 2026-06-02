@@ -104,6 +104,7 @@ class AttendanceCheckIn(BaseModel):
     attendance_type: Optional[str] = "office"  # office | wfh | client_visit | field
     geofence_id: Optional[str] = None
     is_mock_location: Optional[bool] = False
+    demo_face_outcome: Optional[str] = None  # for demo: 'success' | 'low_confidence' | 'spoof'
 
 class Complaint(BaseModel):
     id: Optional[str] = None
@@ -564,20 +565,24 @@ def _match_geofence(lat: float, lon: float, attendance_type: str = "office"):
     return None, haversine_m(lat, lon, nearest["lat"], nearest["lon"])
 
 
-def _face_match_score(selfie_present: bool) -> dict:
+def _face_match_score(selfie_present: bool, demo_outcome: Optional[str] = None) -> dict:
     """Mocked face recognition: returns score, pass/fail, and anti-spoof status."""
     if not selfie_present:
         return {"score": 0.0, "passed": False, "spoof_detected": False, "reason": "no_selfie"}
+    # Demo overrides — used to deterministically show different outcomes during a demo
+    if demo_outcome == "success":
+        return {"score": round(0.92 + _rand.random() * 0.07, 3), "passed": True, "spoof_detected": False, "reason": "ok"}
+    if demo_outcome == "low_confidence":
+        return {"score": round(0.62 + _rand.random() * 0.10, 3), "passed": False, "spoof_detected": False, "reason": "low_confidence"}
+    if demo_outcome == "spoof":
+        return {"score": round(0.30 + _rand.random() * 0.15, 3), "passed": False, "spoof_detected": True, "reason": "spoof_attempt"}
     # Deterministic-ish "good" score based on time
     seed = int(datetime.now().timestamp()) % 100
-    # 92% of the time, succeed at 88-99% match
     if seed < 92:
         score = round(0.88 + (seed % 11) / 100.0, 3)
         return {"score": score, "passed": True, "spoof_detected": False, "reason": "ok"}
-    # 5% — low confidence
     if seed < 97:
         return {"score": 0.72, "passed": False, "spoof_detected": False, "reason": "low_confidence"}
-    # 3% — spoof
     return {"score": 0.41, "passed": False, "spoof_detected": True, "reason": "spoof_attempt"}
 
 
@@ -600,7 +605,7 @@ async def list_geofences(user: dict = Depends(get_current_user)):
 async def attendance_check(body: AttendanceCheckIn, user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     fence, distance = _match_geofence(body.latitude, body.longitude, body.attendance_type or "office")
-    face = _face_match_score(bool(body.selfie_b64))
+    face = _face_match_score(bool(body.selfie_b64), body.demo_face_outcome)
 
     inside = fence is not None
     accepted = (inside and face["passed"] and not body.is_mock_location)
