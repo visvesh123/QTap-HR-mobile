@@ -12,6 +12,18 @@ import { api } from '../src/api';
 import { colors, radii, spacing, typo } from '../src/theme';
 import { PrimaryButton } from '../src/ui';
 
+// Local fallback so demo logins are always available even if /api is slow/down.
+const FALLBACK_DEMOS = [
+  { role: 'student', email: 'student@mahindrauniversity.edu.in',    password: 'student123',    name: 'Aarav Sharma' },
+  { role: 'student', email: 'student2@mahindrauniversity.edu.in',   password: 'student123',    name: 'Ananya Verma' },
+  { role: 'staff',   email: 'faculty@mahindrauniversity.edu.in',    password: 'faculty123',    name: 'Dr. Rajesh Kumar (Faculty)' },
+  { role: 'staff',   email: 'librarian@mahindrauniversity.edu.in',  password: 'librarian123',  name: 'Mrs. Anita Nair (Librarian)' },
+  { role: 'staff',   email: 'warden@mahindrauniversity.edu.in',     password: 'warden123',     name: 'Mr. Vikram Singh (Warden)' },
+  { role: 'staff',   email: 'security@mahindrauniversity.edu.in',   password: 'security123',   name: 'Mr. Ramesh Kale (Security)' },
+  { role: 'staff',   email: 'exam@mahindrauniversity.edu.in',       password: 'exam123',       name: 'Dr. Kavita Joshi (Exam Cell)' },
+  { role: 'admin',   email: 'admin@mahindrauniversity.edu.in',      password: 'admin123',      name: 'Mr. Suresh Iyer (Administrator)' },
+];
+
 export default function Login() {
   const router = useRouter();
   const { role } = useLocalSearchParams<{ role?: string }>();
@@ -21,10 +33,26 @@ export default function Login() {
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [demos, setDemos] = useState<any[]>([]);
+  const [demos, setDemos] = useState<any[]>(FALLBACK_DEMOS.filter((x) => !role || x.role === role));
 
   useEffect(() => {
-    api.demoAccounts().then((d) => setDemos(d.filter((x) => !role || x.role === role))).catch(() => {});
+    let cancelled = false;
+    const fetchDemos = async () => {
+      try {
+        // Race against a 4s timeout so a slow backend doesn't blank the list
+        const result = await Promise.race([
+          api.demoAccounts(),
+          new Promise<any[]>((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000)),
+        ]);
+        if (cancelled) return;
+        const filtered = (result as any[]).filter((x) => !role || x.role === role);
+        if (filtered.length) setDemos(filtered);
+      } catch {
+        // keep fallback
+      }
+    };
+    fetchDemos();
+    return () => { cancelled = true; };
   }, [role]);
 
   const onSubmit = async () => {
