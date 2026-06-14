@@ -18,6 +18,21 @@ export const colors = {
   warning: '#F59E0B',
   info: '#3B82F6',
   shadow: 'rgba(227, 24, 55, 0.12)',
+
+  // Claymorphism palette
+  clayBg:        '#F2EDE7',  // warm pale neutral page background
+  clayBgSoft:    '#EEE7DF',
+  claySurface:   '#FFFFFF',  // chunky card body
+  clayHighlight: '#FFFFFF',  // simulated top-left light
+  clayShadow:    '#C4B7A6',  // simulated bottom-right shadow tone
+  clayDark:      '#3A2F2A',
+  clayMuted:     '#8A7B6F',
+  clayPink:      '#FFD0D6',
+  clayPeach:     '#FFE4D2',
+  clayMint:      '#D8F1E1',
+  clayLilac:     '#E2D6FF',
+  claySky:       '#D8E8FF',
+  clayBlush:     '#FCEBE8',
 };
 
 export const spacing = {
@@ -36,6 +51,10 @@ export const radii = {
   xl: 20,
   xxl: 24,
   pill: 999,
+  // Clay-specific generous radii
+  clay: 26,
+  clayLg: 32,
+  clayPill: 999,
 };
 
 export const typo = {
@@ -64,6 +83,73 @@ export const shadow = {
     shadowRadius: 16,
     elevation: 6,
   },
+};
+
+// Claymorphism shadow recipes — soft & chunky, multi-layered on web
+import { Platform } from 'react-native';
+
+export const clay = {
+  surface: Platform.select({
+    web: {
+      // Outer soft shadow + subtle inset highlight (bottom-right dark, top-left light)
+      boxShadow:
+        '10px 10px 24px rgba(196, 183, 166, 0.55), ' +
+        '-8px -8px 20px rgba(255, 255, 255, 0.85), ' +
+        'inset 1px 1px 2px rgba(255, 255, 255, 0.55), ' +
+        'inset -1px -1px 2px rgba(196, 183, 166, 0.22)',
+    } as any,
+    default: {
+      shadowColor: '#8C7565',
+      shadowOffset: { width: 8, height: 10 },
+      shadowOpacity: 0.28,
+      shadowRadius: 18,
+      elevation: 8,
+    },
+  }),
+  surfaceSoft: Platform.select({
+    web: {
+      boxShadow:
+        '6px 6px 14px rgba(196, 183, 166, 0.40), ' +
+        '-4px -4px 12px rgba(255, 255, 255, 0.85)',
+    } as any,
+    default: {
+      shadowColor: '#8C7565',
+      shadowOffset: { width: 4, height: 6 },
+      shadowOpacity: 0.20,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+  }),
+  pressed: Platform.select({
+    web: {
+      boxShadow:
+        'inset 5px 5px 12px rgba(196, 183, 166, 0.55), ' +
+        'inset -5px -5px 12px rgba(255, 255, 255, 0.85)',
+    } as any,
+    default: {
+      shadowColor: '#8C7565',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.10,
+      shadowRadius: 4,
+      elevation: 1,
+    },
+  }),
+  crimson: Platform.select({
+    web: {
+      boxShadow:
+        '8px 10px 22px rgba(227, 24, 55, 0.30), ' +
+        '-4px -4px 14px rgba(255, 255, 255, 0.65), ' +
+        'inset 1px 1px 2px rgba(255, 255, 255, 0.30), ' +
+        'inset -1px -1px 2px rgba(0, 0, 0, 0.15)',
+    } as any,
+    default: {
+      shadowColor: colors.primaryDark,
+      shadowOffset: { width: 4, height: 8 },
+      shadowOpacity: 0.35,
+      shadowRadius: 14,
+      elevation: 8,
+    },
+  }),
 };
 
 // Branding

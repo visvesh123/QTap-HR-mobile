@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/auth';
 import { api } from '../../src/api';
-import { colors, radii, shadow, spacing, typo, BRAND } from '../../src/theme';
+import { colors, radii, shadow, spacing, typo, BRAND, clay } from '../../src/theme';
 import { ServiceTile, SectionHeader, Card } from '../../src/ui';
 import { SECTIONED_SERVICES } from '../../src/services-catalog';
 import MessLiveCard from '../../src/components/MessLiveCard';
@@ -236,16 +236,16 @@ const QuickAction = ({ icon, label, onPress, iconLib = 'mci' }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.clayBg },
   topBar: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
-    borderBottomLeftRadius: 28, borderBottomRightRadius: 28,
+    borderBottomLeftRadius: 32, borderBottomRightRadius: 32,
   },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerLogoBadge: {
-    width: 40, height: 40, borderRadius: 12,
+    width: 42, height: 42, borderRadius: 14,
     backgroundColor: colors.white,
     alignItems: 'center', justifyContent: 'center',
   },
@@ -253,8 +253,8 @@ const styles = StyleSheet.create({
   brandSmall: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.85)', letterSpacing: 2 },
   brandTitle: { fontSize: 18, fontWeight: '700', color: colors.white, marginTop: 2 },
   iconBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center', justifyContent: 'center',
   },
   greet: { fontSize: 26, fontWeight: '800', color: colors.white, marginTop: spacing.md, letterSpacing: -0.5 },
@@ -265,49 +265,55 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     padding: spacing.md,
     backgroundColor: colors.white,
+    borderRadius: radii.clay,
+    ...(clay.surface as any),
   },
-  welcomeKicker: { fontSize: 11, fontWeight: '700', color: colors.gold, letterSpacing: 1.4 },
-  welcomeTitle: { fontSize: 22, fontWeight: '800', color: colors.text, marginTop: 4, lineHeight: 26 },
+  welcomeKicker: { fontSize: 11, fontWeight: '800', color: colors.gold, letterSpacing: 1.4 },
+  welcomeTitle: { fontSize: 22, fontWeight: '800', color: colors.clayDark, marginTop: 4, lineHeight: 26 },
   welcomeBtn: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 10,
+    backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 11,
     borderRadius: 999, alignSelf: 'flex-start', marginTop: spacing.sm, gap: 6,
+    ...(clay.crimson as any),
   },
-  welcomeBtnText: { color: colors.white, fontSize: 13, fontWeight: '700' },
+  welcomeBtnText: { color: colors.white, fontSize: 13, fontWeight: '800' },
   welcomeImg: {
-    width: 96, height: 96, borderRadius: 16,
-    backgroundColor: colors.primaryBg,
+    width: 96, height: 96, borderRadius: radii.clay,
+    backgroundColor: colors.clayPeach,
     alignItems: 'center', justifyContent: 'center',
+    ...(clay.surfaceSoft as any),
   },
   statValue: { fontSize: 22, fontWeight: '800', color: colors.text },
   statLabel: { fontSize: 11, color: colors.textSecondary, marginTop: -2 },
   quickRow: {
     flexDirection: 'row', justifyContent: 'space-around',
-    marginTop: -spacing.md, marginHorizontal: spacing.md,
-    backgroundColor: colors.white, borderRadius: radii.lg, padding: spacing.md,
-    ...shadow.cardHeavy,
+    marginTop: -spacing.lg, marginHorizontal: spacing.md,
+    backgroundColor: colors.white, borderRadius: radii.clay, padding: spacing.md,
+    ...(clay.surface as any),
   },
   quickItem: { alignItems: 'center', gap: 6, flex: 1 },
   quickIcon: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: colors.primaryBg,
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: colors.clayPink,
     alignItems: 'center', justifyContent: 'center',
+    ...(clay.surfaceSoft as any),
   },
-  quickLabel: { fontSize: 11, fontWeight: '600', color: colors.text },
+  quickLabel: { fontSize: 11, fontWeight: '700', color: colors.clayDark },
   promoWrap: {
     marginTop: spacing.lg, marginHorizontal: spacing.md,
-    borderRadius: radii.lg, overflow: 'hidden', height: 120,
+    borderRadius: radii.clay, overflow: 'hidden', height: 130,
+    ...(clay.surface as any),
   },
   promoImg: { width: '100%', height: '100%', position: 'absolute' },
   promoOverlay: { flex: 1, padding: spacing.md, justifyContent: 'flex-end' },
-  promoKicker: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.85)', letterSpacing: 1.5 },
+  promoKicker: { fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.9)', letterSpacing: 1.5 },
   promoTitle: { fontSize: 18, fontWeight: '800', color: colors.white, marginTop: 2 },
   promoBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: colors.white, paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: colors.white, paddingHorizontal: 14, paddingVertical: 7,
     borderRadius: 999, alignSelf: 'flex-start', marginTop: 8,
   },
-  promoBtnText: { fontSize: 12, fontWeight: '700', color: colors.primary },
+  promoBtnText: { fontSize: 12, fontWeight: '800', color: colors.primary },
   grid: {
     flexDirection: 'row', flexWrap: 'wrap',
     paddingHorizontal: spacing.md, gap: spacing.sm,

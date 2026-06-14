@@ -101,3 +101,171 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: |
+  Mahindra University campus management app. Latest user requests:
+  1. Convert UI to Claymorphism (BRANDED — crimson/gold on warm cream)
+  2. Single toggling button for Check-In/Check-Out (multi-punch: cycle between
+     check-in and check-out unlimited times in a day)
+  3. Re-run full E2E backend + frontend validation
+
+backend:
+  - task: "Attendance multi-punch /api/attendance/check"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Backend already supports multi-punch (no duplicate guard). Just needs verification: faculty user can POST /api/attendance/check with type=in then type=out then type=in again, all accepted when inside geofence + face passes."
+
+  - task: "/api/attendance/today aggregation"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Returns first check_in and last check_out for today. Should remain correct after multiple punches."
+
+  - task: "/api/attendance/history for multi-punch derivation"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Frontend reads history to derive lastEventToday for multi-punch. History should return events sorted by timestamp desc, with type and accepted fields."
+
+  - task: "Auth /api/auth/login + demo accounts"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Sanity verify all 8 demo accounts still log in (student, faculty, librarian, warden, security, exam, admin)."
+
+frontend:
+  - task: "Claymorphism Login screen redesign"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/login.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Rewrote login.tsx using ClayCard, ClayInput, ClayLabel components. Branded crimson/gold palette on warm cream background. Demo cards are clay surfaces with avatar + clay shadow. Verify login still functions for all roles."
+
+  - task: "Claymorphism Home tab visual refresh"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(tabs)/index.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Updated styles to use clay surfaces, larger radii (clay 26px), pastel quick-action icons. Hero kept brand crimson gradient."
+
+  - task: "Claymorphism Attendance screen + Single toggle button"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/modules/attendance.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "MAJOR CHANGE: Replaced two side-by-side Check-In/Check-Out buttons with a SINGLE TOGGLE button that switches color and label based on lastEventToday derived from history. Multi-punch: user can check in -> check out -> check in -> check out unlimited times. Hero shows PUNCH count and last punch time. Cards converted to clay style with crimson primary chips for attendance type. Verify: (1) Initial state shows green Check-In, (2) After Check-In completes, button toggles to crimson Check-Out and hero updates to 'Currently checked in · 1 PUNCH'. (3) After Check-Out, button toggles back to green Check-In with 'Re-punch · Welcome back' subtitle. (4) Multi-punch hint visible after first punch."
+
+  - task: "Clay component primitives (ClayCard, ClayButton, ClayInput, ClayLabel, ClayStat)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/Clay.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Added ClayInput (inset pressed look) and ClayLabel (uppercase tracked). Verify components render correctly with Platform.select shadows (web uses boxShadow recipes, native uses shadowColor)."
+
+  - task: "Routing & 10 module placeholders sanity"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/modules/*"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Inherited pending task from earlier fork — never fully validated E2E. Modules: examinations, library, hostel, gate, wallet, parcel, visitor, events, communication, sos, mess, map, attendance, admin."
+
+  - task: "HR Admin Web Portal (/admin/*)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/admin/*"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Desktop-first admin pages: dashboard, attendance, employees, geofences, reports. Verify each loads with admin credentials."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.1"
+  test_sequence: 1
+  run_ui: true
+
+test_plan:
+  current_focus:
+    - "Claymorphism Attendance screen + Single toggle button"
+    - "Claymorphism Login screen redesign"
+    - "Attendance multi-punch /api/attendance/check"
+    - "/api/attendance/today aggregation"
+    - "/api/attendance/history for multi-punch derivation"
+    - "Routing & 10 module placeholders sanity"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: |
+      Implemented branded Claymorphism showcase on Login, Home, and Attendance screens.
+      Most important behavior change: Attendance now has ONE toggle button (green Check-In or
+      crimson Check-Out) driven by lastEventToday derived from /api/attendance/history.
+      The button cycles unlimited times (multi-punch). Please:
+      1. Run backend tests for /api/attendance/check, /today, /history, /stats, /auth/login.
+      2. Run frontend tests focusing on Attendance multi-punch flow:
+         a. login as faculty@mahindrauniversity.edu.in / faculty123
+         b. open /modules/attendance
+         c. verify single big toggle button "Check In" is visible (testID="action-in")
+         d. click it → modal opens → click snap-btn → wait 3s → click result-done
+         e. verify the button NOW shows "Check Out" (testID="action-out") and hero shows "Currently checked in · 1 PUNCH"
+         f. click Check Out → snap → done
+         g. verify button toggles BACK to "Check In" (testID="action-in") with subtitle "Re-punch · Welcome back" and hero shows "2 PUNCHES"
+         h. repeat once more (in → out) → verify "4 PUNCHES" badge appears in hero
+      3. Sanity test that login still works for all 8 demo accounts.
+      4. Sanity test that admin can navigate to /admin and see dashboard.
+      Demo creds in /app/memory/test_credentials.md

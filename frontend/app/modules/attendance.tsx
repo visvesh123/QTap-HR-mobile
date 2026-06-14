@@ -11,7 +11,7 @@ import * as Location from 'expo-location';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { api } from '../../src/api';
 import { useAuth } from '../../src/auth';
-import { colors, radii, shadow, spacing } from '../../src/theme';
+import { colors, radii, shadow, spacing, clay } from '../../src/theme';
 import { Card, Pill, Badge, ScreenHeader, Empty } from '../../src/ui';
 import { ProgressRing, WeekStreak, TodayTimeline } from '../../src/components/AttendanceVisuals';
 
@@ -70,7 +70,31 @@ export default function StaffAttendanceScreen() {
 
   const checkedIn = !!today?.check_in;
   const checkedOut = !!today?.check_out;
-  const nextAction: 'in' | 'out' | 'done' = !checkedIn ? 'in' : (!checkedOut ? 'out' : 'done');
+
+  // Determine the LAST event today (multi-punch friendly).
+  // We look through history for events on today's date (local) and take
+  // the most recent accepted event. If "in" was last → next action is OUT.
+  // If "out" was last (or nothing today) → next action is IN.
+  const lastEventToday: 'in' | 'out' | null = useMemo(() => {
+    const todayLocal = new Date();
+    const y = todayLocal.getFullYear();
+    const m = String(todayLocal.getMonth() + 1).padStart(2, '0');
+    const d = String(todayLocal.getDate()).padStart(2, '0');
+    const todayStr = `${y}-${m}-${d}`;
+    const todayEvents = history
+      .filter((h: any) => h?.accepted && (h?.timestamp || '').slice(0, 10) === todayStr)
+      .sort((a: any, b: any) => (a.timestamp < b.timestamp ? 1 : -1));
+    const last = todayEvents[0];
+    if (!last) return null;
+    return last.type === 'in' ? 'in' : 'out';
+  }, [history]);
+
+  const nextAction: 'in' | 'out' = lastEventToday === 'in' ? 'out' : 'in';
+  const punchCount = useMemo(() => {
+    const todayLocal = new Date();
+    const todayStr = todayLocal.toISOString().slice(0, 10);
+    return history.filter((h: any) => h?.accepted && (h?.timestamp || '').slice(0, 10) === todayStr).length;
+  }, [history]);
 
   const onCheckPress = (kind: 'in' | 'out') => {
     setCaptureKind(kind);
@@ -121,7 +145,12 @@ export default function StaffAttendanceScreen() {
             demoInsideFence={demoInsideFence}
             setDemoInsideFence={setDemoInsideFence}
             geofences={geofences}
+            checkedIn={checkedIn}
+            checkedOut={checkedOut}
             nextAction={nextAction}
+            lastEventToday={lastEventToday}
+            punchCount={punchCount}
+            history={history}
             onCheck={onCheckPress}
           />
         )}
@@ -150,107 +179,156 @@ export default function StaffAttendanceScreen() {
 // ---------- TODAY ----------
 const TodayTab = ({
   today, attType, setAttType, demoMode, setDemoMode,
-  demoInsideFence, setDemoInsideFence, geofences, nextAction, onCheck,
+  demoInsideFence, setDemoInsideFence, geofences,
+  checkedIn, checkedOut, nextAction, lastEventToday, punchCount, history, onCheck,
 }: any) => {
   const status = today?.status || 'absent';
   const sm = STATUS_META[status] || STATUS_META.absent;
-  const hours = today?.work_seconds ? (today.work_seconds / 3600).toFixed(1) : '0.0';
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayPunches = useMemo(() =>
+    (history || [])
+      .filter((h: any) => h?.accepted && (h?.timestamp || '').slice(0, 10) === todayStr)
+      .sort((a: any, b: any) => (a.timestamp < b.timestamp ? -1 : 1)),
+  [history]);
+  const lastPunchTime = todayPunches.length
+    ? new Date(todayPunches[todayPunches.length - 1].timestamp)
+        .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : null;
+
+  const heroHeadline = !checkedIn
+    ? 'Ready to check in'
+    : nextAction === 'out'
+      ? 'Currently checked in'
+      : `Re-punch any time · ${punchCount} today`;
 
   return (
     <View>
       {/* Status hero */}
-      <LinearGradient
-        colors={[colors.primaryDark, colors.primaryLight]}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-        style={styles.hero}
-      >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View>
-            <Text style={styles.heroKicker}>{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}</Text>
-            <Text style={styles.heroTitle}>
-              {nextAction === 'in'   ? 'Ready to check in' :
-               nextAction === 'out'  ? 'Currently checked in' :
-                                       'Day complete ✓'}
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'center' }}>
-              <Badge label={sm.label.toUpperCase()} color={sm.color} bg="rgba(255,255,255,0.2)" />
-              {today?.check_in?.attendance_type && (
-                <Badge
-                  label={TYPE_META[today.check_in.attendance_type as AttType]?.label.toUpperCase() || ''}
-                  color={colors.white}
-                  bg="rgba(255,255,255,0.18)"
-                />
+      <View style={[styles.heroWrap, clay.crimson as any]}>
+        <LinearGradient
+          colors={[colors.primaryDark, colors.primary, colors.primaryLight]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={styles.hero}
+        >
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={styles.heroKicker}>{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}</Text>
+              <Text style={styles.heroTitle}>{heroHeadline}</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Badge label={sm.label.toUpperCase()} color={sm.color} bg="rgba(255,255,255,0.22)" />
+                {today?.check_in?.attendance_type && (
+                  <Badge
+                    label={TYPE_META[today.check_in.attendance_type as AttType]?.label.toUpperCase() || ''}
+                    color={colors.white}
+                    bg="rgba(255,255,255,0.18)"
+                  />
+                )}
+                {punchCount > 0 && (
+                  <Badge
+                    label={`${punchCount} PUNCH${punchCount === 1 ? '' : 'ES'}`}
+                    color={colors.white}
+                    bg="rgba(255,255,255,0.18)"
+                  />
+                )}
+              </View>
+              {lastPunchTime && (
+                <Text style={styles.heroLastPunch}>
+                  Last punch · {lastPunchTime} ({lastEventToday === 'in' ? 'Check-In' : 'Check-Out'})
+                </Text>
               )}
             </View>
+            <View style={[styles.heroOrb, clay.surfaceSoft as any]}>
+              <MaterialCommunityIcons
+                name={lastEventToday === 'in' ? 'clock-time-four-outline' : checkedIn ? 'check-circle-outline' : 'fingerprint'}
+                size={36} color={colors.white}
+              />
+            </View>
           </View>
-          <MaterialCommunityIcons
-            name={nextAction === 'done' ? 'check-circle-outline' : 'clock-time-four-outline'}
-            size={56} color="rgba(255,255,255,0.9)"
-          />
-        </View>
-      </LinearGradient>
+        </LinearGradient>
+      </View>
 
       {/* Today's Timeline */}
-      <Card style={{ marginTop: spacing.md }}>
+      <View style={[styles.clayBlock]}>
+        <Text style={styles.cardLabel}>TODAY&apos;S TIMELINE</Text>
         <TodayTimeline
           checkIn={today?.check_in?.timestamp}
           checkOut={today?.check_out?.timestamp}
           workSeconds={today?.work_seconds}
         />
-      </Card>
+      </View>
 
-      {/* Attendance type selector */}
-      {nextAction === 'in' && (
-        <Card style={{ marginTop: spacing.md }}>
-          <Text style={styles.cardLabel}>ATTENDANCE TYPE</Text>
-          <View style={styles.typeRow}>
-            {(Object.keys(TYPE_META) as AttType[]).map((t) => {
-              const m = TYPE_META[t];
-              const active = attType === t;
-              return (
-                <TouchableOpacity
-                  key={t}
-                  onPress={() => setAttType(t)}
-                  activeOpacity={0.7}
-                  testID={`atttype-${t}`}
-                  style={[styles.typeBtn, active && styles.typeBtnActive]}
-                >
-                  <MaterialCommunityIcons name={m.icon as any} size={20} color={active ? colors.primary : colors.textSecondary} />
-                  <Text style={[styles.typeBtnText, active && { color: colors.primary }]}>{m.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </Card>
-      )}
+      {/* Attendance type selector — always visible */}
+      <View style={[styles.clayBlock, { marginTop: spacing.md }]}>
+        <Text style={styles.cardLabel}>ATTENDANCE TYPE</Text>
+        <View style={styles.typeRow}>
+          {(Object.keys(TYPE_META) as AttType[]).map((t) => {
+            const m = TYPE_META[t];
+            const active = attType === t;
+            return (
+              <TouchableOpacity
+                key={t}
+                onPress={() => setAttType(t)}
+                activeOpacity={0.7}
+                testID={`atttype-${t}`}
+                style={[styles.typeBtn, active && styles.typeBtnActive, active && (clay.crimson as any)]}
+              >
+                <MaterialCommunityIcons name={m.icon as any} size={18} color={active ? colors.white : colors.clayMuted} />
+                <Text style={[styles.typeBtnText, active && { color: colors.white }]}>{m.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
 
-      {/* Action button */}
-      {nextAction !== 'done' && (
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => onCheck(nextAction)}
-          testID={`action-${nextAction}`}
-          style={styles.checkBtnWrap}
+      {/* SINGLE TOGGLE Action button — switches between Check-In / Check-Out */}
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => onCheck(nextAction)}
+        testID={`action-${nextAction}`}
+        style={[styles.toggleWrap, clay.crimson as any]}
+      >
+        <LinearGradient
+          colors={
+            nextAction === 'in'
+              ? ['#22C55E', '#16A34A', '#15803D']
+              : [colors.primaryLight, colors.primary, colors.primaryDark]
+          }
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={styles.toggleBtn}
         >
-          <LinearGradient
-            colors={nextAction === 'in' ? ['#16A34A', '#15803D'] : [colors.primaryDark, colors.primary]}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-            style={styles.checkBtn}
-          >
+          <View style={[styles.toggleIconWrap, clay.surfaceSoft as any]}>
             <MaterialCommunityIcons
               name={nextAction === 'in' ? 'login-variant' : 'logout-variant'}
-              size={26} color="#FFFFFF"
+              size={30}
+              color={colors.white}
             />
-            <Text style={styles.checkBtnText}>
-              {nextAction === 'in' ? 'Check In Now' : 'Check Out Now'}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.toggleTitle}>
+              {nextAction === 'in' ? 'Check In' : 'Check Out'}
             </Text>
-            <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
-          </LinearGradient>
-        </TouchableOpacity>
+            <Text style={styles.toggleSub}>
+              {nextAction === 'in'
+                ? (punchCount === 0 ? 'Start your day · Geo + Face verified' : 'Re-punch · Welcome back')
+                : 'End shift / break · Geo + Face verified'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.85)" />
+        </LinearGradient>
+      </TouchableOpacity>
+
+      {/* Helper note for multi-punch */}
+      {checkedIn && (
+        <View style={styles.multiPunchHint}>
+          <MaterialCommunityIcons name="refresh" size={14} color={colors.clayMuted} />
+          <Text style={styles.multiPunchText}>
+            Multi-punch enabled · Check-In / Check-Out any number of times today.
+          </Text>
+        </View>
       )}
 
       {/* Demo mode toggle */}
-      <Card style={{ marginTop: spacing.md }}>
+      <View style={[styles.clayBlock, { marginTop: spacing.md }]}>
         <View style={styles.demoRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.cardLabel}>DEMO MODE</Text>
@@ -288,14 +366,14 @@ const TodayTab = ({
             </TouchableOpacity>
           </View>
         )}
-      </Card>
+      </View>
 
       {/* Configured geofences */}
-      <Card style={{ marginTop: spacing.md }}>
+      <View style={[styles.clayBlock, { marginTop: spacing.md }]}>
         <Text style={styles.cardLabel}>AUTHORIZED LOCATIONS</Text>
         {geofences.map((g: any) => (
           <View key={g.id} style={styles.fenceRow}>
-            <View style={[styles.fenceIcon, { backgroundColor: g.type === 'wfh' ? '#DBEAFE' : `${colors.primary}15` }]}>
+            <View style={[styles.fenceIcon, { backgroundColor: g.type === 'wfh' ? colors.claySky : colors.clayBlush }, clay.surfaceSoft as any]}>
               <MaterialCommunityIcons
                 name={g.type === 'wfh' ? 'home-outline' : g.type === 'branch' ? 'office-building-outline' : 'school-outline'}
                 size={18}
@@ -311,7 +389,7 @@ const TodayTab = ({
             )}
           </View>
         ))}
-      </Card>
+      </View>
     </View>
   );
 };
@@ -1024,17 +1102,55 @@ function labelReason(r?: string) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.clayBg },
   tabRow: {
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: 6,
   },
-  hero: {
-    borderRadius: radii.xl,
-    padding: spacing.md,
-    ...shadow.cardHeavy,
+  heroWrap: {
+    borderRadius: radii.clay,
   },
-  heroKicker: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.85)', letterSpacing: 1.2 },
+  hero: {
+    borderRadius: radii.clay,
+    padding: spacing.md + 2,
+  },
+  heroOrb: {
+    width: 60, height: 60, borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  heroKicker: { fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.9)', letterSpacing: 1.2 },
   heroTitle: { fontSize: 22, fontWeight: '800', color: colors.white, marginTop: 4 },
+  heroLastPunch: { marginTop: 10, fontSize: 12, color: 'rgba(255,255,255,0.9)', fontWeight: '600' },
+  clayBlock: {
+    backgroundColor: colors.claySurface,
+    borderRadius: radii.clay,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    ...(clay.surface as any),
+  },
+  toggleWrap: {
+    marginTop: spacing.md,
+    borderRadius: radii.clay,
+    overflow: 'hidden',
+  },
+  toggleBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 18, paddingHorizontal: 18,
+    gap: 14,
+  },
+  toggleIconWrap: {
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  toggleTitle: { fontSize: 19, fontWeight: '900', color: colors.white, letterSpacing: 0.3 },
+  toggleSub: { fontSize: 12, color: 'rgba(255,255,255,0.92)', marginTop: 2, fontWeight: '600' },
+  multiPunchHint: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 10,
+    paddingHorizontal: spacing.md,
+  },
+  multiPunchText: { fontSize: 11, color: colors.clayMuted, fontWeight: '600' },
   timeRow: {
     flexDirection: 'row', alignItems: 'center',
     marginTop: spacing.md, backgroundColor: 'rgba(255,255,255,0.15)',
@@ -1043,28 +1159,40 @@ const styles = StyleSheet.create({
   timeDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.3)', alignSelf: 'stretch' },
   timeVal: { fontSize: 17, fontWeight: '800', color: colors.white },
   timeLab: { fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 2, letterSpacing: 0.8, fontWeight: '600' },
-  cardLabel: { fontSize: 10, fontWeight: '700', color: colors.textMuted, letterSpacing: 1.4 },
+  cardLabel: { fontSize: 10, fontWeight: '800', color: colors.clayMuted, letterSpacing: 1.4 },
   typeRow: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10,
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12,
   },
   typeBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 8,
-    backgroundColor: colors.background,
+    paddingHorizontal: 14, paddingVertical: 10,
+    backgroundColor: colors.clayBgSoft,
     borderRadius: radii.pill,
-    borderWidth: 1, borderColor: colors.border,
   },
   typeBtnActive: {
-    backgroundColor: colors.primaryBg,
-    borderColor: colors.primary,
+    backgroundColor: colors.primary,
   },
-  typeBtnText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+  typeBtnText: { fontSize: 12, fontWeight: '700', color: colors.clayDark },
   checkBtnWrap: { marginTop: spacing.md, borderRadius: radii.lg, overflow: 'hidden' },
   checkBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 10, paddingVertical: 18,
   },
   checkBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '800' },
+  actionRow: {
+    flexDirection: 'row', gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  actionBtnWrap: {
+    borderRadius: radii.lg, overflow: 'hidden',
+    ...shadow.card,
+  },
+  actionBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 10, paddingVertical: 16, paddingHorizontal: 10,
+  },
+  actionBtnTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  actionBtnSub: { color: 'rgba(255,255,255,0.85)', fontSize: 10, fontWeight: '600', marginTop: 1 },
   demoRow: { flexDirection: 'row', alignItems: 'center' },
   demoSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   demoBox: {
