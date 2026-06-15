@@ -1,12 +1,12 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
   useWindowDimensions, Platform,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
 import { useAuth } from '../auth';
-import { colors, radii, shadow, spacing } from '../theme';
+import { colors, radii, spacing, clay, BRAND } from '../theme';
 
 export const useIsDesktop = () => {
   const { width } = useWindowDimensions();
@@ -21,14 +21,30 @@ const NAV: { route: string; label: string; icon: string }[] = [
   { route: '/admin/reports',    label: 'Reports',    icon: 'file-chart-outline' },
 ];
 
-export function AdminShell({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+// Reference design black sidebar tones
+const SB_BG       = '#0F0F12';
+const SB_BG_SOFT  = '#16161C';
+const SB_BORDER   = '#26262E';
+const SB_TEXT     = '#FFFFFF';
+const SB_MUTED    = '#7B8794';
+const SB_HOVER    = '#1F1F26';
+
+export function AdminShell({
+  title, subtitle, breadcrumb, children,
+}: {
+  title: string;
+  subtitle?: string;
+  breadcrumb?: string;
+  children: React.ReactNode;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const isDesktop = useIsDesktop();
   const { user, logout } = useAuth();
+  const initials = (user?.name || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 
   if (!isDesktop) {
-    // Mobile fallback: simple stacked scroll
+    // Mobile fallback (no major redesign needed here — keep working)
     return (
       <ScrollView style={styles.mobileWrap} contentContainerStyle={{ paddingBottom: 80 }}>
         <View style={styles.mobileHeader}>
@@ -62,19 +78,22 @@ export function AdminShell({ title, subtitle, children }: { title: string; subti
 
   return (
     <View style={styles.root}>
-      {/* Sidebar */}
+      {/* ─────────────── Black Sidebar ─────────────── */}
       <View style={styles.sidebar}>
-        <View style={styles.brand}>
-          <View style={styles.brandIcon}>
-            <Text style={styles.brandIconText}>MU</Text>
-          </View>
-          <View>
-            <Text style={styles.brandTitle}>Campus HR</Text>
-            <Text style={styles.brandSub}>Admin Portal</Text>
+        <View>
+          <View style={styles.brand}>
+            <View style={styles.brandLogo}>
+              <Text style={styles.brandLogoText}>MU</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.brandTitle} numberOfLines={1}>{BRAND.name}</Text>
+              <Text style={styles.brandSub}>VMS · RECEPTION</Text>
+            </View>
           </View>
         </View>
 
-        <View style={{ marginTop: 16 }}>
+        <Text style={styles.navHeader}>NAVIGATION</Text>
+        <View>
           {NAV.map((n) => {
             const active = pathname === n.route || (n.route !== '/admin' && pathname.startsWith(n.route));
             return (
@@ -84,15 +103,15 @@ export function AdminShell({ title, subtitle, children }: { title: string; subti
                 style={[styles.navItem, active && styles.navItemActive]}
                 testID={`nav-${n.label.toLowerCase()}`}
               >
+                {active && <View style={styles.navActiveBar} />}
                 <MaterialCommunityIcons
                   name={n.icon as any}
-                  size={20}
-                  color={active ? colors.primary : colors.textSecondary}
+                  size={18}
+                  color={active ? colors.white : SB_MUTED}
                 />
-                <Text style={[styles.navLabel, active && { color: colors.primary, fontWeight: '700' }]}>
+                <Text style={[styles.navLabel, active && styles.navLabelActive]}>
                   {n.label}
                 </Text>
-                {active && <View style={styles.navActiveBar} />}
               </TouchableOpacity>
             );
           })}
@@ -103,103 +122,269 @@ export function AdminShell({ title, subtitle, children }: { title: string; subti
         <View style={styles.sidebarFooter}>
           <View style={styles.userCard}>
             <View style={styles.userAvatar}>
-              <Text style={styles.userAvatarText}>{(user?.name || '?').split(' ').map((p) => p[0]).slice(0, 2).join('')}</Text>
+              <MaterialCommunityIcons name="shield-check-outline" size={16} color={colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.userName} numberOfLines={1}>{user?.name}</Text>
-              <Text style={styles.userRole}>Administrator</Text>
+              <Text style={styles.userName} numberOfLines={1}>Front Desk · Gate 1</Text>
+              <Text style={styles.userRole}>Reception · On Shift</Text>
             </View>
-            <TouchableOpacity
-              onPress={async () => { await logout(); router.replace('/role-select'); }}
-              style={styles.signOut}
-              testID="admin-signout"
-            >
-              <Ionicons name="log-out-outline" size={18} color={colors.sos} />
-            </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={() => router.replace('/(tabs)')} style={styles.backToApp}>
-            <Ionicons name="arrow-back" size={14} color={colors.primary} />
-            <Text style={styles.backToAppText}>Back to mobile app</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Main content */}
-      <ScrollView style={styles.main} contentContainerStyle={{ paddingBottom: 60 }}>
-        <View style={styles.pageHead}>
-          <View>
+      {/* ─────────────── Main Column ─────────────── */}
+      <View style={styles.main}>
+        {/* Top bar: breadcrumb / title + search + user pill */}
+        <View style={styles.topBar}>
+          <View style={{ flex: 1 }}>
+            <View style={styles.crumbRow}>
+              <Text style={styles.crumb}>{breadcrumb || 'VMS'}</Text>
+              <Ionicons name="chevron-forward" size={12} color={colors.textMuted} />
+              <Text style={styles.crumbActive}>Overview</Text>
+            </View>
             <Text style={styles.pageTitle}>{title}</Text>
             {subtitle ? <Text style={styles.pageSub}>{subtitle}</Text> : null}
           </View>
+
+          <View style={styles.topRight}>
+            <View style={styles.searchWrap}>
+              <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search visitors, hosts, passes…"
+                placeholderTextColor={colors.textMuted}
+              />
+              <View style={styles.kbd}><Text style={styles.kbdText}>⌘K</Text></View>
+            </View>
+
+            <TouchableOpacity style={styles.bellBtn}>
+              <Ionicons name="notifications-outline" size={18} color={colors.text} />
+              <View style={styles.bellDot} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={async () => { await logout(); router.replace('/role-select'); }}
+              style={styles.userPill}
+              testID="admin-signout"
+            >
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.userPillName} numberOfLines={1}>{user?.name || 'Administrator'}</Text>
+                <Text style={styles.userPillRole}>Receptionist · Gate 1</Text>
+              </View>
+              <View style={styles.userPillAvatar}>
+                <Text style={styles.userPillAvatarText}>{initials}</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
-        <View style={styles.pageBody}>{children}</View>
-      </ScrollView>
+
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 80 }}>
+          <View style={styles.pageBody}>{children}</View>
+        </ScrollView>
+      </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, flexDirection: 'row', backgroundColor: '#F1F5F9' },
-  sidebar: {
-    width: 248,
-    backgroundColor: colors.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 22,
-    borderRightWidth: 1, borderRightColor: colors.border,
-  },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6 },
-  brandIcon: {
-    width: 38, height: 38, borderRadius: 10,
-    backgroundColor: colors.primary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  brandIconText: { color: colors.white, fontWeight: '800', fontSize: 14, letterSpacing: 1 },
-  brandTitle: { fontWeight: '800', color: colors.text, fontSize: 15 },
-  brandSub: { color: colors.textMuted, fontSize: 11 },
-  navItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 12, paddingVertical: 10,
-    borderRadius: radii.md, marginTop: 4,
+// ─────────────── Re-usable stat card matching reference design ───────────────
+export function AdminStatCard({
+  label, value, sub, icon, iconColor = colors.primary, iconBg = colors.primaryBg,
+  tone, testID,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  icon: string;
+  iconColor?: string;
+  iconBg?: string;
+  tone?: 'alert' | 'live';
+  testID?: string;
+}) {
+  const isAlert = tone === 'alert';
+  return (
+    <View
+      style={[
+        adminStat.card,
+        isAlert && adminStat.cardAlert,
+        clay.surface as any,
+      ]}
+      testID={testID}
+    >
+      <View style={[
+        adminStat.iconWrap,
+        { backgroundColor: isAlert ? colors.primary : iconBg },
+      ]}>
+        <MaterialCommunityIcons
+          name={icon as any}
+          size={20}
+          color={isAlert ? colors.white : iconColor}
+        />
+      </View>
+      {tone === 'live' && (
+        <View style={adminStat.liveTag}>
+          <View style={adminStat.liveDot} />
+          <Text style={adminStat.liveText}>LIVE</Text>
+        </View>
+      )}
+      <Text style={[adminStat.label, isAlert && { color: colors.primary }]}>{label}</Text>
+      <Text style={[adminStat.value, isAlert && { color: colors.primaryDark }]}>{value}</Text>
+      {sub ? (
+        <Text style={[adminStat.sub, isAlert && { color: colors.primary, fontWeight: '700' }]}>
+          {sub}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+const adminStat = StyleSheet.create({
+  card: {
+    flex: 1, minWidth: 170,
+    backgroundColor: colors.white,
+    borderRadius: 18,
+    padding: 18,
+    gap: 10,
+    minHeight: 168,
+    justifyContent: 'space-between',
     position: 'relative',
   },
-  navItemActive: { backgroundColor: colors.primaryBg },
-  navLabel: { color: colors.textSecondary, fontSize: 13, fontWeight: '600' },
+  cardAlert: {
+    backgroundColor: '#FCEEF1',
+  },
+  iconWrap: {
+    width: 38, height: 38, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  liveTag: {
+    position: 'absolute', top: 16, right: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+  },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary },
+  liveText: { fontSize: 10, fontWeight: '800', color: colors.primary, letterSpacing: 1 },
+  label: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  value: { fontSize: 38, fontWeight: '800', color: colors.ink, letterSpacing: -1, lineHeight: 42 },
+  sub: { fontSize: 11, color: colors.textSecondary, fontWeight: '500' },
+});
+
+const styles = StyleSheet.create({
+  root: { flex: 1, flexDirection: 'row', backgroundColor: colors.background },
+
+  // ─────────── BLACK SIDEBAR ───────────
+  sidebar: {
+    width: 268,
+    backgroundColor: SB_BG,
+    paddingHorizontal: 18,
+    paddingVertical: 22,
+    borderRightWidth: 1, borderRightColor: SB_BORDER,
+  },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 22, borderBottomWidth: 1, borderBottomColor: SB_BORDER },
+  brandLogo: {
+    width: 40, height: 40, borderRadius: 8,
+    backgroundColor: colors.white,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  brandLogoText: { color: colors.primary, fontWeight: '800', fontSize: 13, letterSpacing: 0.5 },
+  brandTitle: { fontWeight: '700', color: SB_TEXT, fontSize: 14 },
+  brandSub: { color: SB_MUTED, fontSize: 10, letterSpacing: 1.3, marginTop: 2, fontWeight: '600' },
+  navHeader: {
+    color: SB_MUTED, fontSize: 10, fontWeight: '700', letterSpacing: 1.6,
+    marginTop: 22, marginBottom: 10, marginLeft: 4,
+  },
+  navItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 14, paddingVertical: 11,
+    borderRadius: 10, marginTop: 2,
+    position: 'relative',
+  },
+  navItemActive: { backgroundColor: SB_HOVER },
+  navLabel: { color: SB_MUTED, fontSize: 13, fontWeight: '600' },
+  navLabelActive: { color: SB_TEXT, fontWeight: '700' },
   navActiveBar: {
-    position: 'absolute', left: 0, top: 8, bottom: 8, width: 3,
+    position: 'absolute', left: -18, top: 6, bottom: 6, width: 3,
     backgroundColor: colors.primary, borderRadius: 2,
   },
-  sidebarFooter: { marginTop: 16 },
+  sidebarFooter: { paddingTop: 18, borderTopWidth: 1, borderTopColor: SB_BORDER },
   userCard: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: colors.background, borderRadius: radii.md, padding: 10,
+    backgroundColor: SB_BG_SOFT, borderRadius: 12, padding: 12,
   },
   userAvatar: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: colors.primaryBg, alignItems: 'center', justifyContent: 'center',
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: '#26262E', alignItems: 'center', justifyContent: 'center',
   },
-  userAvatarText: { color: colors.primary, fontWeight: '800', fontSize: 12 },
-  userName: { fontWeight: '700', color: colors.text, fontSize: 12 },
-  userRole: { color: colors.textMuted, fontSize: 10 },
-  signOut: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center',
-  },
-  backToApp: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, marginTop: 10, paddingVertical: 8,
-  },
-  backToAppText: { color: colors.primary, fontSize: 11, fontWeight: '600' },
-  main: { flex: 1 },
-  pageHead: {
-    padding: 28, paddingBottom: 18,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  pageTitle: { fontSize: 24, fontWeight: '800', color: colors.text },
-  pageSub: { color: colors.textSecondary, marginTop: 4, fontSize: 13 },
-  pageBody: { padding: 28, maxWidth: 1400, width: '100%', alignSelf: 'center' },
+  userAvatarText: { color: SB_TEXT, fontWeight: '800', fontSize: 11 },
+  userName: { fontWeight: '700', color: SB_TEXT, fontSize: 12 },
+  userRole: { color: SB_MUTED, fontSize: 10, marginTop: 2 },
 
-  // Mobile fallback
+  // ─────────── MAIN COLUMN ───────────
+  main: { flex: 1, backgroundColor: colors.background },
+  topBar: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    paddingHorizontal: 36, paddingTop: 28, paddingBottom: 18,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+    backgroundColor: colors.background,
+    gap: 24,
+  },
+  crumbRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  crumb: { fontSize: 12, color: colors.textMuted, fontWeight: '600' },
+  crumbActive: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
+  pageTitle: { fontSize: 36, fontWeight: '800', color: colors.ink, letterSpacing: -1.0 },
+  pageSub: { color: colors.textSecondary, marginTop: 4, fontSize: 13 },
+
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 4 },
+  searchWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    height: 42, paddingHorizontal: 14, minWidth: 320,
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  searchInput: { flex: 1, fontSize: 13, color: colors.text, outlineStyle: 'none' as any, height: '100%' },
+  kbd: {
+    paddingHorizontal: 6, paddingVertical: 2,
+    backgroundColor: colors.steel50, borderRadius: 4,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  kbdText: { fontSize: 10, fontWeight: '700', color: colors.textSecondary },
+
+  bellBtn: {
+    width: 42, height: 42, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 1, borderColor: colors.border,
+    position: 'relative',
+  },
+  bellDot: {
+    position: 'absolute', top: 8, right: 10,
+    width: 8, height: 8, borderRadius: 4,
+    backgroundColor: colors.primary,
+    borderWidth: 1.5, borderColor: colors.white,
+  },
+
+  userPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 14, paddingVertical: 6,
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  userPillName: { fontSize: 13, fontWeight: '700', color: colors.ink },
+  userPillRole: { fontSize: 11, color: colors.textSecondary, marginTop: 1 },
+  userPillAvatar: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center',
+  },
+  userPillAvatarText: { color: colors.white, fontWeight: '800', fontSize: 11 },
+
+  pageBody: { paddingHorizontal: 36, paddingTop: 28, maxWidth: 1500, width: '100%', alignSelf: 'center' },
+
+  // ─────────── Mobile fallback ───────────
   mobileWrap: { flex: 1, backgroundColor: colors.background },
   mobileHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -217,7 +402,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: colors.surface,
     paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: radii.pill, ...shadow.card,
+    borderRadius: radii.pill,
   },
   mobileNavItemActive: { backgroundColor: colors.primary },
   mobileNavLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
