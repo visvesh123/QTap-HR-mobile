@@ -87,7 +87,7 @@ export function AdminShell({
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.brandTitle} numberOfLines={1}>{BRAND.name}</Text>
-              <Text style={styles.brandSub}>VMS · RECEPTION</Text>
+              <Text style={styles.brandSub}>HR · WORKFORCE</Text>
             </View>
           </View>
         </View>
@@ -125,8 +125,8 @@ export function AdminShell({
               <MaterialCommunityIcons name="shield-check-outline" size={16} color={colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.userName} numberOfLines={1}>Front Desk · Gate 1</Text>
-              <Text style={styles.userRole}>Reception · On Shift</Text>
+              <Text style={styles.userName} numberOfLines={1}>HR Operations</Text>
+              <Text style={styles.userRole}>Workforce Analytics · Live</Text>
             </View>
           </View>
         </View>
@@ -169,7 +169,7 @@ export function AdminShell({
             >
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={styles.userPillName} numberOfLines={1}>{user?.name || 'Administrator'}</Text>
-                <Text style={styles.userPillRole}>Receptionist · Gate 1</Text>
+                <Text style={styles.userPillRole}>HR Operations · Admin</Text>
               </View>
               <View style={styles.userPillAvatar}>
                 <Text style={styles.userPillAvatarText}>{initials}</Text>
