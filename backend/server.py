@@ -79,6 +79,16 @@ class LoginIn(BaseModel):
     password: str
     role: Optional[str] = None  # used for role gate validation
 
+class OtpRequestIn(BaseModel):
+    phone: str
+
+class OtpVerifyIn(BaseModel):
+    phone: str
+    code: str
+
+class MicrosoftIn(BaseModel):
+    email: Optional[str] = None
+
 class AuthOut(BaseModel):
     token: str
     user: UserOut
@@ -157,6 +167,20 @@ SEED_USERS = [
     {"email": "amit.jain@mahindrauniversity.edu.in",      "password": "demo123", "name": "Dr. Amit Jain",       "role": "staff", "department": "Faculty - Computer Science", "employee_id": "MU-FAC1025"},
 ]
 
+# Demo mobile numbers for OTP login (10-digit, India format). Mock OTP only.
+DEMO_PHONES = {
+    "student@mahindrauniversity.edu.in":   "9876500001",
+    "student2@mahindrauniversity.edu.in":  "9876500002",
+    "faculty@mahindrauniversity.edu.in":   "9876500010",
+    "librarian@mahindrauniversity.edu.in": "9876500011",
+    "warden@mahindrauniversity.edu.in":    "9876500012",
+    "security@mahindrauniversity.edu.in":  "9876500013",
+    "exam@mahindrauniversity.edu.in":      "9876500014",
+    "admin@mahindrauniversity.edu.in":     "9876500099",
+}
+DEMO_OTP = "123456"
+MICROSOFT_DEMO_EMAIL = "student@mahindrauniversity.edu.in"  # default account for mock SSO
+
 SEED_EVENTS = [
     {"id": "evt1", "title": "TechFest 2026", "category": "Tech", "date": "2026-03-15", "venue": "Main Auditorium", "image": "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600", "description": "Annual technology festival with hackathons, workshops, and guest speakers from industry leaders.", "organizer": "Computer Science Club", "registered": 245},
     {"id": "evt2", "title": "Cultural Night - Rang", "category": "Cultural", "date": "2026-02-28", "venue": "Open Air Theatre", "image": "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=600", "description": "An evening of music, dance, and drama performances by students.", "organizer": "Cultural Committee", "registered": 412},
@@ -189,6 +213,7 @@ SEED_ALERTS = [
 async def on_startup():
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
+    await db.users.create_index("phone", unique=True, sparse=True)
     # Seed users
     for u in SEED_USERS:
         existing = await db.users.find_one({"email": u["email"]})
@@ -209,6 +234,12 @@ async def on_startup():
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
             await db.users.insert_one(doc)
+    # Backfill demo phone numbers (idempotent) for OTP login
+    for email, phone in DEMO_PHONES.items():
+        await db.users.update_one(
+            {"email": email, "$or": [{"phone": {"$exists": False}}, {"phone": None}]},
+            {"$set": {"phone": phone}},
+        )
     # Seed events
     for e in SEED_EVENTS:
         existing = await db.events.find_one({"id": e["id"]})
@@ -356,6 +387,10 @@ async def login(body: LoginIn):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if body.role and body.role != user["role"]:
         raise HTTPException(status_code=403, detail=f"This account is not registered as {body.role}")
+    return _auth_response(user)
+
+
+def _auth_response(user: dict) -> dict:
     token = create_token(user["id"], user["email"], user["role"], user.get("department"))
     return {
         "token": token,
@@ -366,6 +401,53 @@ async def login(body: LoginIn):
             "avatar": user.get("avatar"),
         }
     }
+
+
+def _normalize_phone(phone: str) -> str:
+    digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+    return digits[-10:] if len(digits) >= 10 else digits
+
+
+@api.post("/auth/otp/request")
+async def otp_request(body: OtpRequestIn):
+    """Mock OTP request — no real SMS provider. Always 'sends' the fixed demo OTP."""
+    phone = _normalize_phone(body.phone)
+    if len(phone) != 10:
+        raise HTTPException(status_code=400, detail="Enter a valid 10-digit mobile number")
+    return {
+        "ok": True,
+        "phone": phone,
+        # Surfaced only because this is a mock/demo flow.
+        "demo_otp": DEMO_OTP,
+        "message": f"OTP sent to •••••{phone[-5:]}. Use {DEMO_OTP} for this demo.",
+    }
+
+
+@api.post("/auth/otp/verify", response_model=AuthOut)
+async def otp_verify(body: OtpVerifyIn):
+    """Mock OTP verify — accepts the fixed demo OTP and resolves a user by phone."""
+    if body.code.strip() != DEMO_OTP:
+        raise HTTPException(status_code=401, detail="Incorrect OTP. Please try again.")
+    phone = _normalize_phone(body.phone)
+    user = await db.users.find_one({"phone": phone})
+    if not user:
+        # Demo fallback: unknown numbers sign in as the primary student account.
+        user = await db.users.find_one({"email": MICROSOFT_DEMO_EMAIL})
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found for this number")
+    return _auth_response(user)
+
+
+@api.post("/auth/microsoft", response_model=AuthOut)
+async def microsoft_login(body: MicrosoftIn = None):
+    """Mock Microsoft/Azure AD SSO — no real provider, signs into a demo account."""
+    email = (body.email.lower().strip() if body and body.email else MICROSOFT_DEMO_EMAIL)
+    user = await db.users.find_one({"email": email})
+    if not user:
+        user = await db.users.find_one({"email": MICROSOFT_DEMO_EMAIL})
+    if not user:
+        raise HTTPException(status_code=404, detail="Demo account unavailable")
+    return _auth_response(user)
 
 @api.get("/auth/me", response_model=UserOut)
 async def me(user: dict = Depends(get_current_user)):

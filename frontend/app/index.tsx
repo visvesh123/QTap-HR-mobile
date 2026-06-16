@@ -13,7 +13,7 @@ export default function Index() {
     if (loading) return;
     const t = setTimeout(() => {
       if (user) router.replace('/(tabs)');
-      else router.replace('/role-select');
+      else router.replace('/login');
     }, 1100);
     return () => clearTimeout(t);
   }, [loading, user]);

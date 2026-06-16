@@ -163,7 +163,7 @@ export function AdminShell({
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={async () => { await logout(); router.replace('/role-select'); }}
+              onPress={async () => { await logout(); router.replace('/login'); }}
               style={styles.userPill}
               testID="admin-signout"
             >

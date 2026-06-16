@@ -103,13 +103,74 @@
 #====================================================================================================
 
 user_problem_statement: |
-  Mahindra University campus management app. Latest user requests:
-  1. Convert UI to Claymorphism (BRANDED — crimson/gold on warm cream)
-  2. Single toggling button for Check-In/Check-Out (multi-punch: cycle between
-     check-in and check-out unlimited times in a day)
-  3. Re-run full E2E backend + frontend validation
+  Mahindra University campus management app. LATEST request:
+  Single unified login page for ALL users with THREE methods:
+  (1) Email/Password, (2) Login with OTP (mock OTP to mobile, code 123456),
+  (3) Sign in with Microsoft (MOCK SSO -> demo account). Demo accounts kept,
+  collapsed into a "Demo logins" section. Removed the separate role-select screen
+  (app now opens directly on /login; role is derived from the account).
 
 backend:
+  - task: "Mock OTP login /api/auth/otp/request + /api/auth/otp/verify"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "MOCK OTP (no real SMS). /otp/request validates 10-digit phone, returns demo_otp=123456 and a masked message. /otp/verify checks code==123456, resolves user by phone (DEMO_PHONES backfilled on seeded users via startup), else falls back to primary student. Returns same {token,user} shape as /auth/login. Verify: faculty phone 9876500010 -> faculty staff; unknown number -> student; wrong code -> 401."
+
+  - task: "Mock Microsoft SSO /api/auth/microsoft"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "MOCK SSO (no Azure keys). POST {} -> signs into primary student account, returns {token,user}. Optional email param signs into that seeded account."
+
+  - task: "Phone backfill + sparse unique phone index on startup"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Idempotent $set of DEMO_PHONES on existing seeded users; create_index phone sparse unique. Sanity: existing 8 demo accounts still login with password."
+
+frontend:
+  - task: "Unified single login page (Password + OTP + Microsoft + collapsible Demo logins)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/login.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Rewrote login.tsx. Segmented control Password/OTP (testID method-password, method-otp). Password flow unchanged (email-input, password-input, login-button). OTP flow: phone-input -> send-otp-button -> otp-input -> verify-otp-button (also change-number, resend-otp). Microsoft button (testID microsoft-button) calls mock SSO. Demo logins collapsed behind demo-toggle; expands demo-accounts with demo-go-<email> one-tap cards. Removed role param + back button. Verify all flows land on /(tabs)."
+
+  - task: "Removed role-select; app opens on /login; logout redirects to /login"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/index.tsx, app/(tabs)/profile.tsx, src/components/AdminShell.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "index splash now routes unauthenticated users to /login. Profile Sign Out and AdminShell logout redirect to /login. Verify logout returns to the unified login page."
   - task: "Attendance multi-punch /api/attendance/check"
     implemented: true
     working: "NA"

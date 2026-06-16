@@ -41,6 +41,12 @@ export const api = {
   // auth
   login: (email: string, password: string, role?: string) =>
     request<{ token: string; user: any }>('POST', '/auth/login', { email, password, role }),
+  otpRequest: (phone: string) =>
+    request<{ ok: boolean; phone: string; demo_otp?: string; message: string }>('POST', '/auth/otp/request', { phone }),
+  otpVerify: (phone: string, code: string) =>
+    request<{ token: string; user: any }>('POST', '/auth/otp/verify', { phone, code }),
+  microsoft: (email?: string) =>
+    request<{ token: string; user: any }>('POST', '/auth/microsoft', { email }),
   me: () => request<any>('GET', '/auth/me'),
   demoAccounts: () => request<any[]>('GET', '/auth/demo-accounts'),
 

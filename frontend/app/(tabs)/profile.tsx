@@ -25,7 +25,7 @@ export default function Profile() {
       setConfirmOpen(false);
       setSigningOut(false);
     }
-    router.replace('/role-select');
+    router.replace('/login');
   };
 
   const onLogout = () => setConfirmOpen(true);

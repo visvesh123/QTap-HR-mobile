@@ -1,316 +1,491 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
-  KeyboardAvoidingView, Platform, ActivityIndicator,
+  KeyboardAvoidingView, Platform, ActivityIndicator, LayoutAnimation, UIManager,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../src/auth';
 import { api } from '../src/api';
 import { colors, radii, spacing, typo, clay } from '../src/theme';
-import { ClayCard, ClayButton, ClayInput, ClayLabel } from '../src/components/Clay';
+import { ClayCard, ClayInput, ClayLabel } from '../src/components/Clay';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // Local fallback so demo logins are always available even if /api is slow/down.
 const FALLBACK_DEMOS = [
   { role: 'student', email: 'student@mahindrauniversity.edu.in',    password: 'student123',    name: 'Aarav Sharma' },
-  { role: 'student', email: 'student2@mahindrauniversity.edu.in',   password: 'student123',    name: 'Ananya Verma' },
   { role: 'staff',   email: 'faculty@mahindrauniversity.edu.in',    password: 'faculty123',    name: 'Dr. Rajesh Kumar (Faculty)' },
   { role: 'staff',   email: 'librarian@mahindrauniversity.edu.in',  password: 'librarian123',  name: 'Mrs. Anita Nair (Librarian)' },
   { role: 'staff',   email: 'warden@mahindrauniversity.edu.in',     password: 'warden123',     name: 'Mr. Vikram Singh (Warden)' },
   { role: 'staff',   email: 'security@mahindrauniversity.edu.in',   password: 'security123',   name: 'Mr. Ramesh Kale (Security)' },
   { role: 'staff',   email: 'exam@mahindrauniversity.edu.in',       password: 'exam123',       name: 'Dr. Kavita Joshi (Exam Cell)' },
-  { role: 'admin',   email: 'admin@mahindrauniversity.edu.in',      password: 'admin123',      name: 'Mr. Suresh Iyer (Administrator)' },
+  { role: 'admin',   email: 'admin@mahindrauniversity.edu.in',      password: 'admin123',      name: 'Prof. Suresh Mehta' },
 ];
+
+type Method = 'password' | 'otp';
+
+function MicrosoftLogo({ size = 18 }: { size?: number }) {
+  const s = size / 2 - 1;
+  return (
+    <View style={{ width: size, height: size, flexDirection: 'row', flexWrap: 'wrap', gap: 2 }}>
+      <View style={{ width: s, height: s, backgroundColor: '#F25022' }} />
+      <View style={{ width: s, height: s, backgroundColor: '#7FBA00' }} />
+      <View style={{ width: s, height: s, backgroundColor: '#00A4EF' }} />
+      <View style={{ width: s, height: s, backgroundColor: '#FFB900' }} />
+    </View>
+  );
+}
 
 export default function Login() {
   const router = useRouter();
-  const { role } = useLocalSearchParams<{ role?: string }>();
-  const { login } = useAuth();
+  const { login, setSession } = useAuth();
+
+  const [method, setMethod] = useState<Method>('password');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // password
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [demos, setDemos] = useState<any[]>(FALLBACK_DEMOS.filter((x) => !role || x.role === role));
+
+  // otp
+  const [phone, setPhone] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [otpHint, setOtpHint] = useState('');
+
+  // demo accounts
+  const [demos, setDemos] = useState<any[]>(FALLBACK_DEMOS);
+  const [demosOpen, setDemosOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    const fetchDemos = async () => {
+    (async () => {
       try {
         const result = await Promise.race([
           api.demoAccounts(),
           new Promise<any[]>((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000)),
         ]);
-        if (cancelled) return;
-        const filtered = (result as any[]).filter((x) => !role || x.role === role);
-        if (filtered.length) setDemos(filtered);
+        if (!cancelled && (result as any[])?.length) setDemos(result as any[]);
       } catch {}
-    };
-    fetchDemos();
+    })();
     return () => { cancelled = true; };
-  }, [role]);
+  }, []);
 
-  const onSubmit = async () => {
+  const goHome = () => router.replace('/(tabs)');
+
+  const switchMethod = (m: Method) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setError('');
+    setMethod(m);
+  };
+
+  const toggleDemos = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setDemosOpen((o) => !o);
+  };
+
+  // ----- Password -----
+  const onPasswordSubmit = async () => {
     if (!email || !password) { setError('Please enter email and password'); return; }
     setError(''); setLoading(true);
     try {
-      await login(email.trim().toLowerCase(), password, role);
-      router.replace('/(tabs)');
+      await login(email.trim().toLowerCase(), password);
+      goHome();
     } catch (e: any) {
       setError(e.message || 'Login failed');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  const fillDemo = (d: any) => { setEmail(d.email); setPassword(d.password); };
-
-  const oneTapLogin = async (d: any) => {
-    setEmail(d.email);
-    setPassword(d.password);
+  // ----- OTP -----
+  const onSendOtp = async () => {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 10) { setError('Enter a valid 10-digit mobile number'); return; }
     setError(''); setLoading(true);
     try {
-      await login(d.email, d.password, role);
-      router.replace('/(tabs)');
+      const res = await api.otpRequest(digits);
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setOtpSent(true);
+      setOtp('');
+      setOtpHint(res.message || 'OTP sent.');
     } catch (e: any) {
-      setError(e.message || 'Login failed');
-    } finally {
-      setLoading(false);
-    }
+      setError(e.message || 'Could not send OTP');
+    } finally { setLoading(false); }
   };
 
-  const roleLabel = role === 'student' ? 'Student' : role === 'staff' ? 'Staff' : role === 'admin' ? 'Admin' : 'User';
+  const onVerifyOtp = async () => {
+    if (otp.replace(/\D/g, '').length < 6) { setError('Enter the 6-digit OTP'); return; }
+    setError(''); setLoading(true);
+    try {
+      const res = await api.otpVerify(phone.replace(/\D/g, ''), otp.trim());
+      await setSession(res.token, res.user);
+      goHome();
+    } catch (e: any) {
+      setError(e.message || 'OTP verification failed');
+    } finally { setLoading(false); }
+  };
+
+  const resetOtp = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOtpSent(false); setOtp(''); setOtpHint(''); setError('');
+  };
+
+  // ----- Microsoft -----
+  const onMicrosoft = async () => {
+    setError(''); setLoading(true);
+    try {
+      const res = await api.microsoft();
+      await setSession(res.token, res.user);
+      goHome();
+    } catch (e: any) {
+      setError(e.message || 'Microsoft sign-in failed');
+    } finally { setLoading(false); }
+  };
+
+  // ----- Demo one-tap -----
+  const oneTapLogin = async (d: any) => {
+    setError(''); setLoading(true);
+    try {
+      await login(d.email, d.password);
+      goHome();
+    } catch (e: any) {
+      setError(e.message || 'Login failed');
+    } finally { setLoading(false); }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, clay.surfaceSoft as any]} testID="back-btn">
-            <Ionicons name="chevron-back" size={22} color={colors.text} />
-          </TouchableOpacity>
-
           {/* Hero badge */}
-          <View style={[styles.heroBadgeWrap, clay.crimson as any]}>
-            <LinearGradient
-              colors={[colors.primaryLight, colors.primary, colors.primaryDark]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={styles.heroBadge}
-            >
-              <MaterialCommunityIcons
-                name={role === 'student' ? 'school' : role === 'admin' ? 'shield-crown' : 'account-tie'}
-                size={42}
-                color={colors.white}
-              />
-            </LinearGradient>
-          </View>
-
-          <Text style={styles.title}>{roleLabel} Sign In</Text>
-          <Text style={styles.subtitle}>Welcome to Mahindra University Campus Hub</Text>
-
-          {/* Form card */}
-          <ClayCard style={{ marginTop: spacing.lg }}>
-            <ClayLabel style={{ marginBottom: 6 }}>Email</ClayLabel>
-            <ClayInput style={{ marginBottom: spacing.md }}>
-              <Ionicons name="mail-outline" size={18} color={colors.clayMuted} />
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="you@mahindrauniversity.edu.in"
-                placeholderTextColor={colors.clayMuted}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                testID="email-input"
-              />
-            </ClayInput>
-
-            <ClayLabel style={{ marginBottom: 6 }}>Password</ClayLabel>
-            <ClayInput>
-              <Ionicons name="lock-closed-outline" size={18} color={colors.clayMuted} />
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="••••••••"
-                placeholderTextColor={colors.clayMuted}
-                secureTextEntry={!showPw}
-                testID="password-input"
-              />
-              <TouchableOpacity onPress={() => setShowPw(!showPw)} testID="toggle-password">
-                <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.clayMuted} />
-              </TouchableOpacity>
-            </ClayInput>
-
-            {!!error && <Text style={styles.error} testID="login-error">{error}</Text>}
-
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={onSubmit}
-              disabled={loading}
-              style={[styles.signInWrap, clay.crimson as any, loading && { opacity: 0.7 }]}
-              testID="login-button"
-            >
+          <View style={styles.heroWrap}>
+            <View style={[styles.heroBadgeWrap, clay.crimson as any]}>
               <LinearGradient
                 colors={[colors.primaryLight, colors.primary, colors.primaryDark]}
-                start={{ x: 0, y: 0 }} end={{ x: 0.5, y: 1 }}
-                style={styles.signInBtn}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={styles.heroBadge}
               >
-                {loading ? (
-                  <ActivityIndicator color={colors.white} />
+                <MaterialCommunityIcons name="shield-account" size={40} color={colors.white} />
+              </LinearGradient>
+            </View>
+            <Text style={styles.brand}>MAHINDRA UNIVERSITY</Text>
+            <Text style={styles.title}>Welcome back</Text>
+            <Text style={styles.subtitle}>Sign in to your Campus Hub</Text>
+          </View>
+
+          {/* Method segmented control */}
+          <View style={[styles.segment, clay.surfaceSoft as any]}>
+            <TouchableOpacity
+              style={[styles.segBtn, method === 'password' && styles.segBtnActive]}
+              onPress={() => switchMethod('password')}
+              testID="method-password"
+              activeOpacity={0.9}
+            >
+              <Ionicons name="lock-closed" size={15} color={method === 'password' ? colors.white : colors.clayMuted} />
+              <Text style={[styles.segText, method === 'password' && styles.segTextActive]}>Password</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.segBtn, method === 'otp' && styles.segBtnActive]}
+              onPress={() => switchMethod('otp')}
+              testID="method-otp"
+              activeOpacity={0.9}
+            >
+              <Ionicons name="chatbox-ellipses" size={15} color={method === 'otp' ? colors.white : colors.clayMuted} />
+              <Text style={[styles.segText, method === 'otp' && styles.segTextActive]}>OTP</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Form card */}
+          <ClayCard style={{ marginTop: spacing.md }}>
+            {method === 'password' ? (
+              <>
+                <ClayLabel style={{ marginBottom: 6 }}>Email</ClayLabel>
+                <ClayInput style={{ marginBottom: spacing.md }}>
+                  <Ionicons name="mail-outline" size={18} color={colors.clayMuted} />
+                  <TextInput
+                    style={styles.input}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="you@mahindrauniversity.edu.in"
+                    placeholderTextColor={colors.clayMuted}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    testID="email-input"
+                  />
+                </ClayInput>
+
+                <ClayLabel style={{ marginBottom: 6 }}>Password</ClayLabel>
+                <ClayInput>
+                  <Ionicons name="lock-closed-outline" size={18} color={colors.clayMuted} />
+                  <TextInput
+                    style={styles.input}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="••••••••"
+                    placeholderTextColor={colors.clayMuted}
+                    secureTextEntry={!showPw}
+                    testID="password-input"
+                    onSubmitEditing={onPasswordSubmit}
+                  />
+                  <TouchableOpacity onPress={() => setShowPw(!showPw)} testID="toggle-password">
+                    <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.clayMuted} />
+                  </TouchableOpacity>
+                </ClayInput>
+
+                {!!error && <Text style={styles.error} testID="login-error">{error}</Text>}
+
+                <PrimaryButton label="Sign In" loading={loading} onPress={onPasswordSubmit} testID="login-button" />
+              </>
+            ) : (
+              <>
+                {!otpSent ? (
+                  <>
+                    <ClayLabel style={{ marginBottom: 6 }}>Mobile number</ClayLabel>
+                    <ClayInput>
+                      <Text style={styles.cc}>+91</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={phone}
+                        onChangeText={setPhone}
+                        placeholder="98765 00010"
+                        placeholderTextColor={colors.clayMuted}
+                        keyboardType="number-pad"
+                        maxLength={14}
+                        testID="phone-input"
+                      />
+                    </ClayInput>
+                    <Text style={styles.helper}>We&apos;ll text you a 6-digit verification code.</Text>
+
+                    {!!error && <Text style={styles.error} testID="login-error">{error}</Text>}
+
+                    <PrimaryButton label="Send OTP" loading={loading} onPress={onSendOtp} testID="send-otp-button" />
+                  </>
                 ) : (
                   <>
-                    <Text style={styles.signInText}>Sign In</Text>
-                    <Ionicons name="arrow-forward" size={18} color={colors.white} />
+                    <View style={styles.otpHeader}>
+                      <ClayLabel>Enter OTP</ClayLabel>
+                      <TouchableOpacity onPress={resetOtp} testID="change-number">
+                        <Text style={styles.changeNum}>Change number</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <ClayInput style={{ marginTop: 6 }}>
+                      <Ionicons name="keypad-outline" size={18} color={colors.clayMuted} />
+                      <TextInput
+                        style={[styles.input, styles.otpInput]}
+                        value={otp}
+                        onChangeText={setOtp}
+                        placeholder="------"
+                        placeholderTextColor={colors.clayMuted}
+                        keyboardType="number-pad"
+                        maxLength={6}
+                        testID="otp-input"
+                        onSubmitEditing={onVerifyOtp}
+                      />
+                    </ClayInput>
+                    {!!otpHint && (
+                      <View style={[styles.otpHintBox, clay.surfaceSoft as any]}>
+                        <Ionicons name="information-circle" size={14} color={colors.primary} />
+                        <Text style={styles.otpHintText}>{otpHint}</Text>
+                      </View>
+                    )}
+
+                    {!!error && <Text style={styles.error} testID="login-error">{error}</Text>}
+
+                    <PrimaryButton label="Verify & Sign In" loading={loading} onPress={onVerifyOtp} testID="verify-otp-button" />
+                    <TouchableOpacity onPress={onSendOtp} disabled={loading} style={styles.resendBtn} testID="resend-otp">
+                      <Text style={styles.resendText}>Didn&apos;t get it? Resend OTP</Text>
+                    </TouchableOpacity>
                   </>
                 )}
-              </LinearGradient>
-            </TouchableOpacity>
+              </>
+            )}
           </ClayCard>
 
-          {/* Demo accounts */}
-          {demos.length > 0 && (
-            <View style={{ marginTop: spacing.lg }} testID="demo-accounts">
-              <View style={styles.demoHeaderRow}>
-                <View style={[styles.demoBolt, clay.surfaceSoft as any]}>
-                  <Ionicons name="flash" size={14} color={colors.gold} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.demoTitle}>Quick demo login</Text>
-                  <Text style={styles.demoHint}>Tap any account to instantly sign in.</Text>
-                </View>
-              </View>
+          {/* Divider */}
+          <View style={styles.dividerRow}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>or continue with</Text>
+            <View style={styles.divider} />
+          </View>
 
-              <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
-                {demos.map((d) => (
-                  <View
-                    key={d.email}
-                    style={[styles.demoCard, clay.surface as any]}
-                    testID={`demo-${d.email}`}
-                  >
-                    <TouchableOpacity
-                      onPress={() => oneTapLogin(d)}
-                      style={styles.demoMain}
-                      activeOpacity={0.7}
-                      testID={`demo-go-${d.email}`}
-                    >
-                      <View style={[styles.demoAvatar, clay.crimson as any]}>
-                        <Text style={styles.demoAvatarText}>
-                          {d.name.split(' ').map((p: string) => p[0]).slice(0, 2).join('').toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={{ flex: 1, gap: 2 }}>
-                        <Text style={styles.demoName}>{d.name}</Text>
-                        <Text style={styles.demoEmail} numberOfLines={1}>{d.email}</Text>
-                        <View style={styles.demoPwRow}>
-                          <Ionicons name="key-outline" size={11} color={colors.clayMuted} />
-                          <Text style={styles.demoPw}>{d.password}</Text>
-                        </View>
-                      </View>
-                      <View style={[styles.demoGoBtn, clay.crimson as any]}>
-                        <Ionicons name="log-in-outline" size={14} color={colors.white} />
-                      </View>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => fillDemo(d)}
-                      style={styles.demoFillBtn}
-                      testID={`demo-fill-${d.email}`}
-                    >
-                      <Ionicons name="arrow-up-circle-outline" size={20} color={colors.primary} />
-                    </TouchableOpacity>
+          {/* Microsoft */}
+          <TouchableOpacity
+            style={[styles.msBtn, clay.surface as any]}
+            onPress={onMicrosoft}
+            disabled={loading}
+            activeOpacity={0.85}
+            testID="microsoft-button"
+          >
+            <MicrosoftLogo size={18} />
+            <Text style={styles.msText}>Sign in with Microsoft</Text>
+          </TouchableOpacity>
+
+          {/* Demo accounts (collapsible) */}
+          <TouchableOpacity
+            style={[styles.demoToggle, clay.surfaceSoft as any]}
+            onPress={toggleDemos}
+            activeOpacity={0.85}
+            testID="demo-toggle"
+          >
+            <View style={[styles.demoBolt, clay.surface as any]}>
+              <Ionicons name="flash" size={14} color={colors.gold} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.demoTitle}>Demo logins</Text>
+              <Text style={styles.demoHint}>Tap to view {demos.length} ready-to-use accounts</Text>
+            </View>
+            <Ionicons name={demosOpen ? 'chevron-up' : 'chevron-down'} size={20} color={colors.clayMuted} />
+          </TouchableOpacity>
+
+          {demosOpen && (
+            <View style={{ gap: spacing.sm, marginTop: spacing.sm }} testID="demo-accounts">
+              {demos.map((d) => (
+                <TouchableOpacity
+                  key={d.email}
+                  onPress={() => oneTapLogin(d)}
+                  style={[styles.demoCard, clay.surface as any]}
+                  activeOpacity={0.7}
+                  testID={`demo-go-${d.email}`}
+                >
+                  <View style={[styles.demoAvatar, clay.crimson as any]}>
+                    <Text style={styles.demoAvatarText}>
+                      {d.name.split(' ').map((p: string) => p[0]).slice(0, 2).join('').toUpperCase()}
+                    </Text>
                   </View>
-                ))}
-              </View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={styles.demoName}>{d.name}</Text>
+                    <Text style={styles.demoEmail} numberOfLines={1}>{d.email}</Text>
+                  </View>
+                  <View style={[styles.demoGoBtn, clay.crimson as any]}>
+                    <Ionicons name="log-in-outline" size={15} color={colors.white} />
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
+
+          <Text style={styles.terms}>
+            By continuing you agree to the University acceptable-use policy.
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
+function PrimaryButton({ label, loading, onPress, testID }: { label: string; loading: boolean; onPress: () => void; testID: string }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onPress}
+      disabled={loading}
+      style={[styles.signInWrap, clay.crimson as any, loading && { opacity: 0.7 }]}
+      testID={testID}
+    >
+      <LinearGradient
+        colors={[colors.primaryLight, colors.primary, colors.primaryDark]}
+        start={{ x: 0, y: 0 }} end={{ x: 0.5, y: 1 }}
+        style={styles.signInBtn}
+      >
+        {loading ? (
+          <ActivityIndicator color={colors.white} />
+        ) : (
+          <>
+            <Text style={styles.signInText}>{label}</Text>
+            <Ionicons name="arrow-forward" size={18} color={colors.white} />
+          </>
+        )}
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.clayBg },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxl },
-  backBtn: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: colors.claySurface,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
+
+  heroWrap: { alignItems: 'center', marginTop: spacing.md, marginBottom: spacing.lg },
   heroBadgeWrap: {
-    width: 92, height: 92, borderRadius: 28,
-    alignItems: 'center', justifyContent: 'center',
-    marginTop: spacing.sm, marginBottom: spacing.md,
+    width: 88, height: 88, borderRadius: 26,
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md,
   },
-  heroBadge: {
-    width: 92, height: 92, borderRadius: 28,
-    alignItems: 'center', justifyContent: 'center',
+  heroBadge: { width: 88, height: 88, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  brand: { fontSize: 11, fontWeight: '800', color: colors.primary, letterSpacing: 2 },
+  title: { ...typo.h1, color: colors.clayDark, fontSize: 30, marginTop: 4 },
+  subtitle: { fontSize: 14, color: colors.clayMuted, marginTop: 4, fontWeight: '500' },
+
+  segment: {
+    flexDirection: 'row', borderRadius: 22, padding: 5, gap: 4,
   },
-  title: { ...typo.h1, color: colors.clayDark, fontSize: 32 },
-  subtitle: { fontSize: 14, color: colors.clayMuted, marginTop: 6, fontWeight: '500' },
+  segBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 11, borderRadius: 18,
+  },
+  segBtnActive: { backgroundColor: colors.primary },
+  segText: { fontSize: 14, fontWeight: '700', color: colors.clayMuted },
+  segTextActive: { color: colors.white },
+
   input: { flex: 1, fontSize: 15, color: colors.clayDark, fontWeight: '500', height: '100%' },
+  cc: { fontSize: 15, fontWeight: '700', color: colors.clayDark, marginRight: 2 },
+  otpInput: { letterSpacing: 8, fontSize: 20, fontWeight: '800' },
+  helper: { fontSize: 12, color: colors.clayMuted, marginTop: 8, fontWeight: '500' },
   error: { color: colors.sos, marginTop: spacing.sm, fontSize: 13, fontWeight: '600' },
 
-  signInWrap: {
-    marginTop: spacing.lg, borderRadius: 30, overflow: 'hidden',
+  otpHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  changeNum: { fontSize: 12, fontWeight: '700', color: colors.primary },
+  otpHintBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: spacing.sm, padding: 10, borderRadius: 14,
   },
+  otpHintText: { flex: 1, fontSize: 12, color: colors.clayDark, fontWeight: '500' },
+  resendBtn: { alignItems: 'center', marginTop: spacing.sm },
+  resendText: { fontSize: 13, fontWeight: '600', color: colors.clayMuted },
+
+  signInWrap: { marginTop: spacing.lg, borderRadius: 30, overflow: 'hidden' },
   signInBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 8, paddingVertical: 16, paddingHorizontal: 24,
   },
   signInText: { color: colors.white, fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },
 
-  demoHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  demoBolt: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: colors.goldLight,
-    alignItems: 'center', justifyContent: 'center',
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: spacing.lg },
+  divider: { flex: 1, height: 1, backgroundColor: colors.clayShadow },
+  dividerText: { fontSize: 12, color: colors.clayMuted, fontWeight: '600' },
+
+  msBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    paddingVertical: 15, borderRadius: radii.clay, marginTop: spacing.md,
+    backgroundColor: colors.claySurface,
   },
+  msText: { fontSize: 15, fontWeight: '700', color: colors.clayDark },
+
+  demoToggle: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: spacing.md, borderRadius: radii.clay, marginTop: spacing.lg,
+  },
+  demoBolt: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   demoTitle: { fontSize: 14, fontWeight: '800', color: colors.clayDark },
   demoHint: { fontSize: 11, color: colors.clayMuted, marginTop: 1 },
 
   demoCard: {
-    flexDirection: 'row', alignItems: 'stretch',
-    backgroundColor: colors.claySurface,
-    borderRadius: radii.clay,
-    overflow: 'hidden',
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: spacing.md, paddingVertical: 12,
+    borderRadius: radii.clay, backgroundColor: colors.claySurface,
   },
-  demoMain: {
-    flex: 1,
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: spacing.sm + 4,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  demoAvatar: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: colors.primary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  demoAvatarText: { fontSize: 14, fontWeight: '800', color: colors.white },
+  demoAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  demoAvatarText: { fontSize: 13, fontWeight: '800', color: colors.white },
   demoName: { fontSize: 13, fontWeight: '800', color: colors.clayDark },
   demoEmail: { fontSize: 11, color: colors.clayMuted },
-  demoPwRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  demoPw: {
-    fontSize: 11, fontWeight: '700', color: colors.clayDark,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    backgroundColor: colors.goldLight,
-    paddingHorizontal: 6, paddingVertical: 1,
-    borderRadius: 4,
-  },
-  demoGoBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: colors.primary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  demoFillBtn: {
-    width: 44,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: colors.goldLight,
-  },
+  demoGoBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+
+  terms: { fontSize: 11, color: colors.clayMuted, textAlign: 'center', marginTop: spacing.lg, lineHeight: 16 },
 });

@@ -1,0 +1,43 @@
+{
+  "summary": "Unified /login page (3 sign-in methods + collapsed Demo logins) fully validated end-to-end. Backend: 14/14 pytest pass — OTP request 200 with demo_otp=123456 for 10-digit phone, 400 for short numbers; OTP verify returns faculty (role=staff) for 9876500010+123456, falls back to primary student for unknown 10-digit numbers, returns 401 for wrong code; Microsoft mock SSO returns token+user (student@mahindrauniversity.edu.in) and /auth/me works with that token; all 8 demo password accounts (student, student2, faculty, librarian, warden, security, exam, admin) still log in via /api/auth/login. Frontend (mobile 375x800): Password method (method-password + email-input + password-input + login-button) logs in faculty and lands on /(tabs); OTP method (method-otp -> phone-input -> send-otp-button -> otp-input -> verify-otp-button) with 9876500010+123456 lands on /(tabs); Microsoft button (microsoft-button) signs in and lands on /(tabs); Demo logins collapsible (demo-toggle expands demo-accounts, demo-go-admin@mahindrauniversity.edu.in one-tap login works); logout from profile (logout-btn -> logout-confirm modal) returns to /login; admin logout via top-right user pill (admin-signout) from /admin returns to /login. No role-select screen — app opens directly at /login. Deprecated packages detected: none new. RN-Web deprecation warnings persist (shadow*, props.pointerEvents) — carryover from iteration_2.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/login", "issues": ["OTP input has placeholder ------ which renders as a long dashed line; consider showing 6 individual underscores or a real 6-cell OTP UI for better UX. Minor."]}
+    ],
+    "react_native_issues": [
+      {"component": "RN-Web deprecation (carryover)", "issue": "Console warnings persist: 'shadow*' style props are deprecated, use 'boxShadow' and 'props.pointerEvents is deprecated. Use style.pointerEvents'. Same as iteration_1/2 — unresolved. Reference: /app/frontend/src/theme.ts:134-208 (clay.* recipes still use shadowColor/shadowOffset/shadowOpacity/shadowRadius)."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_login_methods.py",
+    "/app/test_reports/pytest/pytest_login_methods.xml"
+  ],
+  "action_items": [
+    "[LOW / carryover] Replace shadow* props with boxShadow in /app/frontend/src/theme.ts (clay.* recipes) and move pointerEvents into style to silence RN-Web deprecation warnings.",
+    "[LOW / nit] OTP screen placeholder '------' renders as one long dashed line; consider a 6-cell OTP input for clearer UX."
+  ],
+  "critical_code_review_comments": [
+    "Backend /api/auth/otp/* and /api/auth/microsoft are CLEARLY MARKED as mock flows (DEMO_OTP=123456, MICROSOFT_DEMO_EMAIL=student@mahindrauniversity.edu.in). The mock OTP is surfaced in the API response as `demo_otp` — fine for demo, but in a real deployment that field MUST be removed.",
+    "OTP verify falls back to primary student for unknown 10-digit numbers (server.py:432-436). Acceptable for demo per the PRD; if/when real SMS is added this fallback must be removed.",
+    "/app/frontend/src/api.ts uses process.env.EXPO_PUBLIC_BACKEND_URL correctly with /api prefix — no hardcoded URLs.",
+    "Login screen (login.tsx) correctly uses testID on every interactive element (method-password, method-otp, email-input, password-input, login-button, phone-input, send-otp-button, otp-input, verify-otp-button, microsoft-button, demo-toggle, demo-accounts, demo-go-<email>, change-number, resend-otp, toggle-password). Excellent test affordance.",
+    "src/auth.tsx exposes both `login(email,password)` and `setSession(token,user)` — the OTP and Microsoft flows correctly use setSession to set token+user from the auth response. Clean separation."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_login_methods.py (created — 14 tests for OTP, Microsoft, password regression)",
+    "/app/test_reports/pytest/pytest_login_methods.xml (new)",
+    "/app/test_reports/iteration_3.json (this report)"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (password, OTP, Microsoft, demo one-tap, profile logout -> /login, admin logout -> /login all verified)"},
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run regression with: EXPO_PUBLIC_BACKEND_URL=https://uni-attendance-hub-2.preview.emergentagent.com pytest /app/backend/tests/ -v. Login E2E test selectors confirmed working: [data-testid=\"method-password|method-otp|email-input|password-input|login-button|phone-input|send-otp-button|otp-input|verify-otp-button|microsoft-button|demo-toggle|demo-accounts|demo-go-<email>|toggle-password|change-number|resend-otp\"]. Profile logout flow uses [data-testid=\"logout-btn\"] -> modal [data-testid=\"logout-confirm\"]. Admin shell uses [data-testid=\"admin-signout\"] (the user pill in the top-right of /admin). The 'logout-variant' string in /app/frontend/app/admin/index.tsx:103 is a MaterialCommunityIcon name on the Checked Out KPI card — not a logout button.",
+  "rca_of_issue": "N/A — no bugs reproduced this iteration."
+}
