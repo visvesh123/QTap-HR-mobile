@@ -9,6 +9,7 @@ import { useAuth } from '../../src/auth';
 import { api } from '../../src/api';
 import { colors, radii, spacing, BRAND, clay } from '../../src/theme';
 import { Card } from '../../src/ui';
+import { timeAgo, daysUntil } from '../../src/timeago';
 import MessLiveCard from '../../src/components/MessLiveCard';
 
 const CAMPUS_IMG = 'https://customer-assets.emergentagent.com/job_6e34b5bc-d1ea-497f-9b38-6e61f8c9d982/artifacts/08bgdgj4_image.png';
@@ -48,9 +49,13 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [weather, setWeather] = useState<any>(null);
+  const [holiday, setHoliday] = useState<any>(null);
+  const [news, setNews] = useState<any[]>([]);
 
   const load = async () => {
     try { setWeather(await api.weather()); } catch {}
+    try { const h = await api.holidays(); setHoliday(h.upcoming?.[0] || null); } catch {}
+    try { setNews(await api.news()); } catch {}
     if (user?.role === 'admin') {
       try { setStats(await api.adminDashboard()); } catch {}
     }
@@ -199,6 +204,74 @@ export default function Home() {
           )}
         </View>
 
+        {/* Upcoming holiday countdown */}
+        {holiday && (() => {
+          const d = daysUntil(holiday.date);
+          const countdown = d <= 0 ? 'Today' : d === 1 ? 'Tomorrow' : `in ${d} days`;
+          const dt = new Date(`${holiday.date}T00:00:00`);
+          return (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={styles.holidayCard}
+              onPress={() => router.push('/modules/leave')}
+              testID="holiday-card"
+            >
+              <View style={styles.holidayDate}>
+                <Text style={styles.holidayDay}>{dt.getDate()}</Text>
+                <Text style={styles.holidayMon}>{dt.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.holidayKicker}>NEXT HOLIDAY</Text>
+                <Text style={styles.holidayName} numberOfLines={1}>{holiday.name}</Text>
+                <Text style={styles.holidayType}>{holiday.type}</Text>
+              </View>
+              <View style={styles.holidayPill}>
+                <MaterialCommunityIcons name="calendar-clock" size={14} color={colors.primary} />
+                <Text style={styles.holidayPillText}>{countdown}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })()}
+
+        {/* Latest campus news */}
+        {news.length > 0 && (
+          <View style={styles.newsSection}>
+            <View style={styles.sectionRow}>
+              <View>
+                <Text style={styles.sectionTitle}>Latest News</Text>
+                <Text style={styles.sectionSub}>Happenings around campus</Text>
+              </View>
+              <TouchableOpacity onPress={() => router.push('/modules/news')} testID="news-see-all">
+                <Text style={styles.seeAll}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.newsScroll}
+            >
+              {news.map((n) => (
+                <TouchableOpacity
+                  key={n.id}
+                  style={styles.newsCard}
+                  activeOpacity={0.9}
+                  onPress={() => router.push('/modules/news')}
+                  testID={`news-${n.id}`}
+                >
+                  <Image source={{ uri: n.image }} style={styles.newsImg} />
+                  <View style={styles.newsBody}>
+                    <View style={styles.newsCatBadge}>
+                      <Text style={styles.newsCatText}>{n.category}</Text>
+                    </View>
+                    <Text style={styles.newsTitle} numberOfLines={2}>{n.title}</Text>
+                    <Text style={styles.newsTime}>{timeAgo(n.date)}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Mess live capacity */}
         <MessLiveCard />
       </ScrollView>
@@ -302,6 +375,50 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 22, fontWeight: '800', color: colors.text },
   statLabel: { fontSize: 11, color: colors.textSecondary, marginTop: -2 },
+
+  holidayCard: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    marginTop: spacing.md, marginHorizontal: spacing.md,
+    backgroundColor: colors.white, borderRadius: radii.clay, padding: spacing.md,
+    ...(clay.surface as any),
+  },
+  holidayDate: {
+    width: 56, height: 56, borderRadius: 16,
+    backgroundColor: colors.clayPeach, alignItems: 'center', justifyContent: 'center',
+  },
+  holidayDay: { fontSize: 22, fontWeight: '900', color: colors.primary, lineHeight: 24 },
+  holidayMon: { fontSize: 10, fontWeight: '800', color: colors.primary, letterSpacing: 1 },
+  holidayKicker: { fontSize: 10, fontWeight: '800', color: colors.gold, letterSpacing: 1.4 },
+  holidayName: { fontSize: 17, fontWeight: '800', color: colors.clayDark, marginTop: 2 },
+  holidayType: { fontSize: 12, color: colors.clayMuted, marginTop: 1 },
+  holidayPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: colors.clayPink, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999,
+  },
+  holidayPillText: { fontSize: 12, fontWeight: '800', color: colors.primary },
+
+  newsSection: { marginTop: spacing.lg },
+  sectionRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: spacing.md, marginBottom: spacing.sm,
+  },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: colors.clayDark },
+  sectionSub: { fontSize: 12, color: colors.clayMuted, marginTop: 1 },
+  seeAll: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  newsScroll: { paddingHorizontal: spacing.md, gap: spacing.sm },
+  newsCard: {
+    width: 250, backgroundColor: colors.white, borderRadius: radii.clay,
+    overflow: 'hidden', ...(clay.surface as any),
+  },
+  newsImg: { width: '100%', height: 130, backgroundColor: colors.clayPeach },
+  newsBody: { padding: spacing.md },
+  newsCatBadge: {
+    alignSelf: 'flex-start', backgroundColor: colors.clayPink,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, marginBottom: 6,
+  },
+  newsCatText: { fontSize: 10, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 },
+  newsTitle: { fontSize: 14, fontWeight: '700', color: colors.clayDark, lineHeight: 19 },
+  newsTime: { fontSize: 11, color: colors.clayMuted, marginTop: 6 },
 
   promoWrap: {
     marginTop: spacing.lg, marginHorizontal: spacing.md,

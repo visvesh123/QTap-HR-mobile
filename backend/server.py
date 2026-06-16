@@ -524,6 +524,56 @@ async def leave_apply(body: LeaveApplyIn, user: dict = Depends(get_current_user)
     doc.pop("_id", None)
     return doc
 
+# ---------- CAMPUS HOLIDAYS ----------
+HOLIDAYS = [
+    {"name": "Bonalu", "date": "2026-07-13", "type": "Regional Holiday"},
+    {"name": "Independence Day", "date": "2026-08-15", "type": "National Holiday"},
+    {"name": "Ganesh Chaturthi", "date": "2026-09-14", "type": "Festival"},
+    {"name": "Gandhi Jayanti", "date": "2026-10-02", "type": "National Holiday"},
+    {"name": "Dussehra", "date": "2026-10-20", "type": "Festival"},
+    {"name": "Diwali", "date": "2026-11-08", "type": "Festival"},
+    {"name": "Christmas", "date": "2026-12-25", "type": "National Holiday"},
+    {"name": "New Year's Day", "date": "2027-01-01", "type": "Holiday"},
+    {"name": "Republic Day", "date": "2027-01-26", "type": "National Holiday"},
+]
+
+@api.get("/holidays")
+async def holidays():
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    upcoming = [h for h in HOLIDAYS if h["date"] >= today]
+    return {"upcoming": upcoming, "holidays": HOLIDAYS}
+
+
+# ---------- CAMPUS NEWS ----------
+def _news_date(days_ago: int) -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
+
+def _pexels(pid: int) -> str:
+    return f"https://images.pexels.com/photos/{pid}/pexels-photo-{pid}.jpeg?auto=compress&cs=tinysrgb&w=800"
+
+CAMPUS_NEWS = [
+    {"id": "n1", "category": "Achievements", "title": "MU Robotics Team Clinches National Title",
+     "summary": "The university's robotics squad bagged first place at the National Robo-League 2026, beating 60+ institutes with their autonomous rover.",
+     "image": _pexels(2599244), "date": _news_date(1)},
+    {"id": "n2", "category": "Research", "title": "New Centre for AI Research Inaugurated",
+     "summary": "The School of Engineering opened a state-of-the-art AI & Data Science research centre to drive innovation in healthcare and sustainability.",
+     "image": _pexels(3861958), "date": _news_date(2)},
+    {"id": "n3", "category": "Sports", "title": "Annual Sports Meet 2026 Begins This Friday",
+     "summary": "Get ready to cheer! The inter-department sports meet kicks off with athletics, cricket, and basketball across the campus grounds.",
+     "image": _pexels(1205651), "date": _news_date(4)},
+    {"id": "n4", "category": "Academics", "title": "Distinguished Lecture Series: The Future of Work",
+     "summary": "Industry leaders join faculty for a week-long lecture series on AI, automation, and the evolving workplace. Open to all students and staff.",
+     "image": _pexels(256431), "date": _news_date(6)},
+    {"id": "n5", "category": "Campus Life", "title": "Green Campus Drive Plants 500 Saplings",
+     "summary": "Volunteers from across departments came together for the sustainability initiative, adding 500 native saplings to the campus green belt.",
+     "image": _pexels(1072824), "date": _news_date(9)},
+]
+
+@api.get("/news")
+async def news():
+    return CAMPUS_NEWS
+
+
 # ---------- WEATHER (Open-Meteo, no API key) ----------
 HYD_LAT, HYD_LON = 17.385, 78.4867
 _WEATHER_CACHE: dict = {}

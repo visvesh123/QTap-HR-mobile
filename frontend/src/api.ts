@@ -123,4 +123,8 @@ export const api = {
   leaveSummary: () => request<{ balances: any[]; requests: any[] }>('GET', '/leave/summary'),
   leaveApply: (payload: { type: string; from_date: string; to_date: string; reason: string }) =>
     request<any>('POST', '/leave/apply', payload),
+
+  // holidays & news
+  holidays: () => request<{ upcoming: any[]; holidays: any[] }>('GET', '/holidays'),
+  news: () => request<any[]>('GET', '/news'),
 };
