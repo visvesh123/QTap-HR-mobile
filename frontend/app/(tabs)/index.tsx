@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ImageBackground, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/auth';
@@ -89,37 +88,27 @@ export default function Home() {
         contentContainerStyle={{ paddingBottom: spacing.xxl }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
+        {/* Top bar — MUOne brand + weather (above the photo) */}
+        <View style={styles.topBar}>
+          <View style={styles.brandRow}>
+            <Image source={{ uri: BRAND.logoUrl }} style={styles.barLogo} resizeMode="contain" />
+            <Text style={styles.wmMU}>MU<Text style={styles.wmOne}>One</Text></Text>
+          </View>
+          {weather && weather.temp_c != null && (
+            <View style={styles.tempChip} testID="weather-chip">
+              <MaterialCommunityIcons name={weatherIconForCode(weather.code)} size={20} color={colors.primary} />
+              <Text style={styles.tempVal}>{weather.temp_c}°</Text>
+              <Text style={styles.tempHL}>H:{weather.high_c ?? '—'}°  L:{weather.low_c ?? '—'}°</Text>
+            </View>
+          )}
+        </View>
+
         {/* Campus weather hero */}
         <ImageBackground source={{ uri: CAMPUS_IMG }} style={styles.hero} imageStyle={styles.heroImg}>
           <LinearGradient
-            colors={['rgba(0,0,0,0.10)', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.85)']}
+            colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.85)']}
             style={styles.heroOverlay}
           >
-            <View style={styles.heroTopRow}>
-              <View style={styles.heroBrandPill}>
-                <Image source={{ uri: BRAND.logoUrl }} style={styles.heroLogo} resizeMode="contain" />
-                <Text style={styles.wmMU}>MU<Text style={styles.wmOne}>One</Text></Text>
-              </View>
-
-              {weather && weather.temp_c != null && (
-                <View style={styles.glassChipWrap}>
-                  <BlurView intensity={32} tint="light" style={styles.glassChip}>
-                    <View style={styles.glassTopRow}>
-                      <MaterialCommunityIcons
-                        name={weatherIconForCode(weather.code)}
-                        size={22}
-                        color={colors.white}
-                      />
-                      <Text style={styles.glassTemp}>{weather.temp_c}°</Text>
-                    </View>
-                    <Text style={styles.glassHL}>
-                      H:{weather.high_c ?? '—'}°  L:{weather.low_c ?? '—'}°
-                    </Text>
-                  </BlurView>
-                </View>
-              )}
-            </View>
-
             <View style={styles.heroBottom}>
               <Text style={styles.heroDate}>{dateStr}</Text>
               <Text style={styles.heroGreet}>{timeGreet}, {firstName}!</Text>
@@ -304,29 +293,23 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     borderBottomLeftRadius: 28, borderBottomRightRadius: 28,
   },
-  heroBrandPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
+  topBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: spacing.md, paddingVertical: 12,
     backgroundColor: colors.white,
-    paddingHorizontal: 12, paddingVertical: 7,
-    borderRadius: 14, alignSelf: 'flex-start',
-    ...(clay.surface as any),
   },
-  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  glassChipWrap: {
-    borderRadius: 18, overflow: 'hidden',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)',
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  barLogo: { width: 26, height: 26 },
+  tempChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: colors.clayPink,
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
   },
-  glassChip: {
-    paddingHorizontal: 12, paddingVertical: 8, alignItems: 'flex-end',
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  glassTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  glassTemp: { fontSize: 24, fontWeight: '800', color: colors.white },
-  glassHL: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.9)', marginTop: 1 },
+  tempVal: { fontSize: 18, fontWeight: '800', color: colors.clayDark },
+  tempHL: { fontSize: 11, fontWeight: '600', color: colors.clayMuted },
   advisoryEmoji: { fontSize: 15, marginTop: 1 },
-  heroLogo: { width: 20, height: 20 },
-  wmMU: { fontSize: 18, fontWeight: '900', color: colors.primary, letterSpacing: -0.3 },
-  wmOne: { fontSize: 18, fontWeight: '800', color: colors.clayDark, letterSpacing: -0.3 },
+  wmMU: { fontSize: 20, fontWeight: '900', color: colors.primary, letterSpacing: -0.3 },
+  wmOne: { fontSize: 20, fontWeight: '800', color: colors.clayDark, letterSpacing: -0.3 },
 
   heroBottom: { gap: 4 },
   heroDate: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.9)' },
