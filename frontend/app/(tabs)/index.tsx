@@ -193,6 +193,9 @@ export default function Home() {
           )}
         </View>
 
+        {/* Mess live capacity */}
+        <MessLiveCard />
+
         {/* Upcoming holiday countdown */}
         {holiday && (() => {
           const d = daysUntil(holiday.date);
@@ -260,9 +263,6 @@ export default function Home() {
             </ScrollView>
           </View>
         )}
-
-        {/* Mess live capacity */}
-        <MessLiveCard />
       </ScrollView>
     </SafeAreaView>
   );
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
   heroImg: { borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
   heroOverlay: {
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
@@ -302,8 +302,7 @@ const styles = StyleSheet.create({
   barLogo: { width: 26, height: 26 },
   tempChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: colors.clayPink,
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
+    paddingVertical: 4,
   },
   tempVal: { fontSize: 18, fontWeight: '800', color: colors.clayDark },
   tempHL: { fontSize: 11, fontWeight: '600', color: colors.clayMuted },
