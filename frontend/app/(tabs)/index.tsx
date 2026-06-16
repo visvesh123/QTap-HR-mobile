@@ -72,7 +72,7 @@ export default function Home() {
 
   const now = new Date();
   const hour = now.getHours();
-  const timeGreet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const timeWord = hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening';
   const HONORIFICS = ['dr', 'dr.', 'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.', 'prof', 'prof.', 'mx', 'mx.'];
   const nameParts = user.name.split(' ').filter(Boolean);
   const firstName = user.role === 'admin'
@@ -111,7 +111,7 @@ export default function Home() {
           >
             <View style={styles.heroBottom}>
               <Text style={styles.heroDate}>{dateStr}</Text>
-              <Text style={styles.heroGreet}>{timeGreet}, {firstName}!</Text>
+              <Text style={styles.heroGreet}>Good <Text style={styles.heroGreetAccent}>{timeWord}</Text>, {firstName}!</Text>
               <View style={styles.heroWeatherRow}>
                 <Text style={styles.advisoryEmoji}>{advisory.emoji}</Text>
                 <Text style={styles.heroWeather}>{advisory.text}</Text>
@@ -313,6 +313,7 @@ const styles = StyleSheet.create({
   heroBottom: { gap: 4 },
   heroDate: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.9)' },
   heroGreet: { fontSize: 32, fontWeight: '900', color: colors.white, letterSpacing: -0.5 },
+  heroGreetAccent: { color: colors.primaryLight },
   heroWeatherRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginTop: 4 },
   heroWeather: { flex: 1, fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.92)', lineHeight: 20 },
 
