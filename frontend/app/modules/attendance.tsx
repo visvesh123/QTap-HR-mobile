@@ -704,7 +704,13 @@ const CaptureFlow = ({
       const inner = json?.data || {};
       const geoOk =
         inner?.attendance?.geo_validation === true || inner?.status?.geo_validation === true;
-      if (json?.success && geoOk) {
+      const msg = String(json?.message || '');
+      // Already geo-validated and only awaiting face → go straight to the camera.
+      const pendingFace =
+        inner?.status?.current_state === 'PENDING_FACE' ||
+        /complete face recognition/i.test(msg);
+
+      if ((json?.success && geoOk) || pendingFace) {
         setVenueName(inner?.venue?.venue_name || null);
         setGeoState('valid');
         setTimeout(() => setStep('camera'), 1100);
