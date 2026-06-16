@@ -145,6 +145,7 @@ export default function StaffAttendanceScreen() {
             demoInsideFence={demoInsideFence}
             setDemoInsideFence={setDemoInsideFence}
             geofences={geofences}
+            designatedLocations={user?.designated_locations || []}
             checkedIn={checkedIn}
             checkedOut={checkedOut}
             nextAction={nextAction}
@@ -179,7 +180,7 @@ export default function StaffAttendanceScreen() {
 // ---------- TODAY ----------
 const TodayTab = ({
   today, attType, setAttType, demoMode, setDemoMode,
-  demoInsideFence, setDemoInsideFence, geofences,
+  demoInsideFence, setDemoInsideFence, geofences, designatedLocations,
   checkedIn, checkedOut, nextAction, lastEventToday, punchCount, history, onCheck,
 }: any) => {
   return (
@@ -263,27 +264,45 @@ const TodayTab = ({
         </View>
       </View>
 
-      {/* Configured geofences */}
+      {/* Authorized / designated locations */}
       <View style={[styles.clayBlock, { marginTop: spacing.md }]}>
         <Text style={styles.cardLabel}>AUTHORIZED LOCATIONS</Text>
-        {geofences.map((g: any) => (
-          <View key={g.id} style={styles.fenceRow}>
-            <View style={[styles.fenceIcon, { backgroundColor: g.type === 'wfh' ? colors.claySky : colors.clayBlush }, clay.surfaceSoft as any]}>
-              <MaterialCommunityIcons
-                name={g.type === 'wfh' ? 'home-outline' : g.type === 'branch' ? 'office-building-outline' : 'school-outline'}
-                size={18}
-                color={g.type === 'wfh' ? colors.info : colors.primary}
-              />
+        {(() => {
+          const normLoc = (loc: any, i: number) => (
+            typeof loc === 'string'
+              ? { id: `dl-${i}`, name: loc, address: 'Designated location', type: 'campus' }
+              : {
+                  id: loc.id || loc._id || `dl-${i}`,
+                  name: loc.name || loc.label || loc.location_name || loc.title || `Location ${i + 1}`,
+                  address: loc.address || loc.description || loc.area || 'Designated location',
+                  type: loc.type || 'campus',
+                  radius_m: loc.radius_m || loc.radius,
+                }
+          );
+          const designated = (designatedLocations || []).map(normLoc);
+          const locs = designated.length ? designated : geofences;
+          if (!locs.length) {
+            return <Text style={styles.fenceAddr}>No designated locations assigned yet.</Text>;
+          }
+          return locs.map((g: any) => (
+            <View key={g.id} style={styles.fenceRow}>
+              <View style={[styles.fenceIcon, { backgroundColor: g.type === 'wfh' ? colors.claySky : colors.clayBlush }, clay.surfaceSoft as any]}>
+                <MaterialCommunityIcons
+                  name={g.type === 'wfh' ? 'home-outline' : g.type === 'branch' ? 'office-building-outline' : 'school-outline'}
+                  size={18}
+                  color={g.type === 'wfh' ? colors.info : colors.primary}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fenceName}>{g.name}</Text>
+                <Text style={styles.fenceAddr}>{g.address}</Text>
+              </View>
+              {g.type !== 'wfh' && !!g.radius_m && (
+                <Badge label={`${g.radius_m}m`} color={colors.primary} />
+              )}
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.fenceName}>{g.name}</Text>
-              <Text style={styles.fenceAddr}>{g.address}</Text>
-            </View>
-            {g.type !== 'wfh' && (
-              <Badge label={`${g.radius_m}m`} color={colors.primary} />
-            )}
-          </View>
-        ))}
+          ));
+        })()}
       </View>
     </View>
   );

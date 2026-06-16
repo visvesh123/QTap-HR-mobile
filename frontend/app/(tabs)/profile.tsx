@@ -31,7 +31,15 @@ export default function Profile() {
   const onLogout = () => setConfirmOpen(true);
 
   const initials = user.name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
-  const idLabel = user.role === 'student' ? user.student_id : user.employee_id;
+  const idLabel = user.qid || (user.role === 'student' ? user.student_id : user.employee_id);
+  const idTitle = user.qid ? 'QID' : 'ID NUMBER';
+
+  const details = [
+    user.qid && { icon: 'id-card-outline', label: 'QID', value: user.qid },
+    (user.type || user.role) && { icon: 'briefcase-outline', label: 'Type', value: user.type || user.role },
+    user.gender && { icon: 'male-female-outline', label: 'Gender', value: user.gender },
+    user.phone && { icon: 'call-outline', label: 'Phone', value: `+91 ${user.phone}` },
+  ].filter(Boolean) as { icon: string; label: string; value: string }[];
 
   const menu = [
     { icon: 'person-outline', label: 'Account Information', onPress: () => {} },
@@ -61,11 +69,31 @@ export default function Profile() {
           </View>
           {!!idLabel && (
             <View style={styles.idCard}>
-              <Text style={styles.idLabel}>ID NUMBER</Text>
+              <Text style={styles.idLabel}>{idTitle}</Text>
               <Text style={styles.idValue}>{idLabel}</Text>
             </View>
           )}
         </LinearGradient>
+
+        <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
+          {details.length > 0 && (
+            <Card testID="profile-details">
+              <Text style={styles.detailsHeading}>PROFILE DETAILS</Text>
+              {details.map((d, i) => (
+                <View
+                  key={d.label}
+                  style={[styles.detailRow, i < details.length - 1 && styles.detailRowDivider]}
+                >
+                  <View style={styles.detailIcon}>
+                    <Ionicons name={d.icon as any} size={17} color={colors.primary} />
+                  </View>
+                  <Text style={styles.detailLabel}>{d.label}</Text>
+                  <Text style={styles.detailValue} numberOfLines={1}>{d.value}</Text>
+                </View>
+              ))}
+            </Card>
+          )}
+        </View>
 
         <View style={{ padding: spacing.md, gap: spacing.sm }}>
           {menu.map((m, i) => (
@@ -156,6 +184,16 @@ const styles = StyleSheet.create({
   },
   idLabel: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.85)', letterSpacing: 1.5 },
   idValue: { fontSize: 16, fontWeight: '700', color: colors.white, marginTop: 2 },
+  detailsHeading: { fontSize: 11, fontWeight: '800', color: colors.textMuted, letterSpacing: 1, marginBottom: 4 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 12 },
+  detailRowDivider: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  detailIcon: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: colors.primaryBg,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  detailLabel: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  detailValue: { fontSize: 14, fontWeight: '700', color: colors.text, maxWidth: '55%', textAlign: 'right' },
   menuRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   menuIcon: {
     width: 40, height: 40, borderRadius: 20,

@@ -74,6 +74,11 @@ class UserOut(BaseModel):
     student_id: Optional[str] = None
     employee_id: Optional[str] = None
     avatar: Optional[str] = None
+    phone: Optional[str] = None
+    qid: Optional[str] = None
+    gender: Optional[str] = None
+    type: Optional[str] = None
+    designated_locations: Optional[list] = None
 
 class LoginIn(BaseModel):
     email: EmailStr
@@ -182,6 +187,10 @@ DEMO_PHONES = {
 DEMO_OTP = "123456"
 MICROSOFT_DEMO_EMAIL = "student@mahindrauniversity.edu.in"  # default account for mock SSO
 
+# External MU profile directory — source of truth for OTP (phone) logins.
+PROFILE_API_BASE = "https://api-dot-dalmart.el.r.appspot.com"
+PROFILE_API_TIMEOUT = 8.0
+
 SEED_EVENTS = [
     {"id": "evt1", "title": "TechFest 2026", "category": "Tech", "date": "2026-03-15", "venue": "Main Auditorium", "image": "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600", "description": "Annual technology festival with hackathons, workshops, and guest speakers from industry leaders.", "organizer": "Computer Science Club", "registered": 245},
     {"id": "evt2", "title": "Cultural Night - Rang", "category": "Cultural", "date": "2026-02-28", "venue": "Open Air Theatre", "image": "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=600", "description": "An evening of music, dance, and drama performances by students.", "organizer": "Cultural Committee", "registered": 412},
@@ -215,6 +224,7 @@ async def on_startup():
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
     await db.users.create_index("phone", unique=True, sparse=True)
+    await db.users.create_index("qid", unique=True, sparse=True)
     # Seed users
     for u in SEED_USERS:
         existing = await db.users.find_one({"email": u["email"]})
@@ -391,22 +401,84 @@ async def login(body: LoginIn):
     return _auth_response(user)
 
 
+def _user_public(user: dict) -> dict:
+    return {
+        "id": user["id"], "email": user["email"], "name": user["name"],
+        "role": user["role"], "department": user.get("department"),
+        "student_id": user.get("student_id"), "employee_id": user.get("employee_id"),
+        "avatar": user.get("avatar"),
+        "phone": user.get("phone"), "qid": user.get("qid"),
+        "gender": user.get("gender"), "type": user.get("type"),
+        "designated_locations": user.get("designated_locations"),
+    }
+
+
 def _auth_response(user: dict) -> dict:
     token = create_token(user["id"], user["email"], user["role"], user.get("department"))
-    return {
-        "token": token,
-        "user": {
-            "id": user["id"], "email": user["email"], "name": user["name"],
-            "role": user["role"], "department": user.get("department"),
-            "student_id": user.get("student_id"), "employee_id": user.get("employee_id"),
-            "avatar": user.get("avatar"),
-        }
-    }
+    return {"token": token, "user": _user_public(user)}
 
 
 def _normalize_phone(phone: str) -> str:
     digits = "".join(ch for ch in (phone or "") if ch.isdigit())
     return digits[-10:] if len(digits) >= 10 else digits
+
+
+async def _sync_external_profile(phone: str) -> dict:
+    """Fetch the MU profile from the external directory by phone, map it to an app
+    user, and upsert into MongoDB. Raises HTTPException (blocking login) on any failure."""
+    url = f"{PROFILE_API_BASE}/api/v2/profile"
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(PROFILE_API_TIMEOUT, connect=4.0)) as http:
+            resp = await http.get(url, params={"phone_number": phone})
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Profile service timed out. Please try again.")
+    except httpx.RequestError:
+        raise HTTPException(status_code=502, detail="Could not reach the profile service. Please try again.")
+
+    if resp.status_code >= 500:
+        raise HTTPException(status_code=502, detail="Profile service is unavailable. Please try again.")
+    try:
+        payload = resp.json()
+    except ValueError:
+        raise HTTPException(status_code=502, detail="Invalid response from profile service.")
+
+    data = payload.get("data")
+    if not payload.get("success") or not data:
+        raise HTTPException(status_code=404, detail="No MU profile found for this mobile number.")
+
+    ext_type = str(data.get("type") or "").strip().lower()
+    role = {"staff": "staff", "student": "student"}.get(ext_type)
+    if not role:
+        raise HTTPException(status_code=403, detail=f"Unsupported account type: {data.get('type') or 'unknown'}")
+
+    qid = data.get("qid")
+    if not qid:
+        raise HTTPException(status_code=502, detail="Profile is missing a QID.")
+
+    email = (data.get("mail_id") or f"{qid}@mahindrauniversity.edu.in").strip().lower()
+    now = datetime.now(timezone.utc).isoformat()
+    set_fields = {
+        "name": data.get("name") or "MU User",
+        "role": role,
+        "type": data.get("type"),
+        "qid": qid,
+        "gender": data.get("gender"),
+        "phone": phone,
+        "email": email,
+        "department": data.get("type"),
+        "designated_locations": data.get("designated_locations") or [],
+        "source": "dalmart",
+        "updated_at": now,
+    }
+    await db.users.update_one(
+        {"phone": phone},
+        {"$set": set_fields, "$setOnInsert": {"id": str(uuid.uuid4()), "avatar": None, "created_at": now}},
+        upsert=True,
+    )
+    user = await db.users.find_one({"phone": phone})
+    if not user:
+        raise HTTPException(status_code=500, detail="Could not create your profile. Please try again.")
+    return user
 
 
 @api.post("/auth/otp/request")
@@ -426,16 +498,14 @@ async def otp_request(body: OtpRequestIn):
 
 @api.post("/auth/otp/verify", response_model=AuthOut)
 async def otp_verify(body: OtpVerifyIn):
-    """Mock OTP verify — accepts the fixed demo OTP and resolves a user by phone."""
+    """Verify the demo OTP, then resolve the user from the external MU profile
+    directory by phone. Login is blocked if no profile is found."""
     if body.code.strip() != DEMO_OTP:
         raise HTTPException(status_code=401, detail="Incorrect OTP. Please try again.")
     phone = _normalize_phone(body.phone)
-    user = await db.users.find_one({"phone": phone})
-    if not user:
-        # Demo fallback: unknown numbers sign in as the primary student account.
-        user = await db.users.find_one({"email": MICROSOFT_DEMO_EMAIL})
-    if not user:
-        raise HTTPException(status_code=404, detail="No account found for this number")
+    if len(phone) != 10:
+        raise HTTPException(status_code=400, detail="Enter a valid 10-digit mobile number")
+    user = await _sync_external_profile(phone)
     return _auth_response(user)
 
 
@@ -452,12 +522,7 @@ async def microsoft_login(body: MicrosoftIn = None):
 
 @api.get("/auth/me", response_model=UserOut)
 async def me(user: dict = Depends(get_current_user)):
-    return {
-        "id": user["id"], "email": user["email"], "name": user["name"],
-        "role": user["role"], "department": user.get("department"),
-        "student_id": user.get("student_id"), "employee_id": user.get("employee_id"),
-        "avatar": user.get("avatar"),
-    }
+    return _user_public(user)
 
 @api.get("/auth/demo-accounts")
 async def demo_accounts():

@@ -10,6 +10,11 @@ export interface User {
   student_id?: string;
   employee_id?: string;
   avatar?: string | null;
+  phone?: string;
+  qid?: string;
+  gender?: string;
+  type?: string;
+  designated_locations?: any[];
 }
 
 interface AuthContextValue {

@@ -35,12 +35,17 @@ class TestOtp:
         assert data["user"]["role"] == "staff"
         assert data["user"]["email"] == "faculty@mahindrauniversity.edu.in"
 
-    def test_otp_verify_unknown_phone_returns_primary_student(self, s):
+    def test_otp_verify_unknown_phone_blocks_login(self, s):
+        # Updated for iteration 4: unknown numbers no longer fall back; they are blocked (404).
         r = s.post(f"{BASE_URL}/api/auth/otp/verify", json={"phone": "1112223334", "code": "123456"})
-        assert r.status_code == 200, r.text
-        data = r.json()
-        assert data["user"]["email"] == "student@mahindrauniversity.edu.in"
-        assert data["user"]["role"] == "student"
+        assert r.status_code == 404, r.text
+        assert "No MU profile found" in r.json().get("detail", "")
+
+    def test_otp_verify_known_faculty_phone_now_external_directory(self, s):
+        # The seeded faculty phone 9876500010 is unknown to the external MU directory.
+        # External-profile flow blocks login -> 404 (this supersedes the older fallback behaviour).
+        r = s.post(f"{BASE_URL}/api/auth/otp/verify", json={"phone": "9876500010", "code": "123456"})
+        assert r.status_code == 404, r.text
 
     def test_otp_verify_wrong_code(self, s):
         r = s.post(f"{BASE_URL}/api/auth/otp/verify", json={"phone": "9876500010", "code": "999999"})
