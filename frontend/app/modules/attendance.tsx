@@ -115,7 +115,6 @@ export default function StaffAttendanceScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader
         title="Attendance"
-        subtitle="Geo + Face verified"
         onBack={() => router.back()}
       />
 
@@ -182,70 +181,53 @@ const TodayTab = ({
   demoInsideFence, setDemoInsideFence, geofences,
   checkedIn, checkedOut, nextAction, lastEventToday, punchCount, history, onCheck,
 }: any) => {
-  const status = today?.status || 'absent';
-  const sm = STATUS_META[status] || STATUS_META.absent;
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todayPunches = useMemo(() =>
-    (history || [])
-      .filter((h: any) => h?.accepted && (h?.timestamp || '').slice(0, 10) === todayStr)
-      .sort((a: any, b: any) => (a.timestamp < b.timestamp ? -1 : 1)),
-  [history]);
-  const lastPunchTime = todayPunches.length
-    ? new Date(todayPunches[todayPunches.length - 1].timestamp)
-        .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : null;
-
-  const heroHeadline = !checkedIn
-    ? 'Ready to check in'
-    : nextAction === 'out'
-      ? 'Currently checked in'
-      : `Re-punch any time · ${punchCount} today`;
-
   return (
     <View>
-      {/* Status hero */}
-      <View style={[styles.heroWrap, clay.crimson as any]}>
+      {/* Check In / Out — top */}
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => onCheck(nextAction)}
+        testID={`action-${nextAction}`}
+        style={[styles.toggleWrap, clay.crimson as any, { marginTop: 0 }]}
+      >
         <LinearGradient
-          colors={[colors.primaryDark, colors.primary, colors.primaryLight]}
+          colors={
+            nextAction === 'in'
+              ? ['#22C55E', '#16A34A', '#15803D']
+              : [colors.primaryLight, colors.primary, colors.primaryDark]
+          }
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={styles.hero}
+          style={styles.toggleBtn}
         >
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <View style={{ flex: 1, paddingRight: 8 }}>
-              <Text style={styles.heroKicker}>{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}</Text>
-              <Text style={styles.heroTitle}>{heroHeadline}</Text>
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <Badge label={sm.label.toUpperCase()} color={sm.color} bg="rgba(255,255,255,0.22)" />
-                {today?.check_in?.attendance_type && (
-                  <Badge
-                    label={TYPE_META[today.check_in.attendance_type as AttType]?.label.toUpperCase() || ''}
-                    color={colors.white}
-                    bg="rgba(255,255,255,0.18)"
-                  />
-                )}
-                {punchCount > 0 && (
-                  <Badge
-                    label={`${punchCount} PUNCH${punchCount === 1 ? '' : 'ES'}`}
-                    color={colors.white}
-                    bg="rgba(255,255,255,0.18)"
-                  />
-                )}
-              </View>
-              {lastPunchTime && (
-                <Text style={styles.heroLastPunch}>
-                  Last punch · {lastPunchTime} ({lastEventToday === 'in' ? 'Check-In' : 'Check-Out'})
-                </Text>
-              )}
-            </View>
-            <View style={[styles.heroOrb, clay.surfaceSoft as any]}>
-              <MaterialCommunityIcons
-                name={lastEventToday === 'in' ? 'clock-time-four-outline' : checkedIn ? 'check-circle-outline' : 'fingerprint'}
-                size={36} color={colors.white}
-              />
-            </View>
+          <View style={[styles.toggleIconWrap, clay.surfaceSoft as any]}>
+            <MaterialCommunityIcons
+              name={nextAction === 'in' ? 'login-variant' : 'logout-variant'}
+              size={30}
+              color={colors.white}
+            />
           </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.toggleTitle}>
+              {nextAction === 'in' ? 'Check In' : 'Check Out'}
+            </Text>
+            <Text style={styles.toggleSub}>
+              {nextAction === 'in'
+                ? (punchCount === 0 ? 'Start your day' : 'Re-punch · Welcome back')
+                : 'End shift / break'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.85)" />
         </LinearGradient>
-      </View>
+      </TouchableOpacity>
+
+      {checkedIn && (
+        <View style={styles.multiPunchHint}>
+          <MaterialCommunityIcons name="refresh" size={14} color={colors.clayMuted} />
+          <Text style={styles.multiPunchText}>
+            Multi-punch enabled · Check-In / Check-Out any number of times today.
+          </Text>
+        </View>
+      )}
 
       {/* Today's Timeline */}
       <View style={[styles.clayBlock]}>
@@ -278,94 +260,6 @@ const TodayTab = ({
             );
           })}
         </View>
-      </View>
-
-      {/* SINGLE TOGGLE Action button — switches between Check-In / Check-Out */}
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={() => onCheck(nextAction)}
-        testID={`action-${nextAction}`}
-        style={[styles.toggleWrap, clay.crimson as any]}
-      >
-        <LinearGradient
-          colors={
-            nextAction === 'in'
-              ? ['#22C55E', '#16A34A', '#15803D']
-              : [colors.primaryLight, colors.primary, colors.primaryDark]
-          }
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={styles.toggleBtn}
-        >
-          <View style={[styles.toggleIconWrap, clay.surfaceSoft as any]}>
-            <MaterialCommunityIcons
-              name={nextAction === 'in' ? 'login-variant' : 'logout-variant'}
-              size={30}
-              color={colors.white}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.toggleTitle}>
-              {nextAction === 'in' ? 'Check In' : 'Check Out'}
-            </Text>
-            <Text style={styles.toggleSub}>
-              {nextAction === 'in'
-                ? (punchCount === 0 ? 'Start your day · Geo + Face verified' : 'Re-punch · Welcome back')
-                : 'End shift / break · Geo + Face verified'}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.85)" />
-        </LinearGradient>
-      </TouchableOpacity>
-
-      {/* Helper note for multi-punch */}
-      {checkedIn && (
-        <View style={styles.multiPunchHint}>
-          <MaterialCommunityIcons name="refresh" size={14} color={colors.clayMuted} />
-          <Text style={styles.multiPunchText}>
-            Multi-punch enabled · Check-In / Check-Out any number of times today.
-          </Text>
-        </View>
-      )}
-
-      {/* Demo mode toggle */}
-      <View style={[styles.clayBlock, { marginTop: spacing.md }]}>
-        <View style={styles.demoRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardLabel}>DEMO MODE</Text>
-            <Text style={styles.demoSub}>Simulate location for demo / testing</Text>
-          </View>
-          <Switch
-            value={demoMode}
-            onValueChange={setDemoMode}
-            trackColor={{ false: colors.border, true: colors.primary }}
-            thumbColor="#FFFFFF"
-            testID="demo-toggle"
-          />
-        </View>
-        {demoMode && (
-          <View style={styles.demoBox}>
-            <TouchableOpacity
-              onPress={() => setDemoInsideFence(true)}
-              style={[styles.demoChip, demoInsideFence && styles.demoChipActive]}
-              testID="demo-inside"
-            >
-              <Ionicons name="checkmark-circle" size={16} color={demoInsideFence ? colors.success : colors.textMuted} />
-              <Text style={[styles.demoChipText, demoInsideFence && { color: colors.success }]}>
-                Inside Mahindra Univ
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setDemoInsideFence(false)}
-              style={[styles.demoChip, !demoInsideFence && styles.demoChipActiveBad]}
-              testID="demo-outside"
-            >
-              <Ionicons name="alert-circle" size={16} color={!demoInsideFence ? colors.sos : colors.textMuted} />
-              <Text style={[styles.demoChipText, !demoInsideFence && { color: colors.sos }]}>
-                Outside Geofence
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </View>
 
       {/* Configured geofences */}
@@ -1173,6 +1067,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.clayBg },
   tabRow: {
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: 6,
+    alignItems: 'center',
   },
   heroWrap: {
     borderRadius: radii.clay,
