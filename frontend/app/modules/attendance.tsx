@@ -268,38 +268,28 @@ const TodayTab = ({
       <View style={[styles.clayBlock, { marginTop: spacing.md }]}>
         <Text style={styles.cardLabel}>AUTHORIZED LOCATIONS</Text>
         {(() => {
-          const normLoc = (loc: any, i: number) => (
-            typeof loc === 'string'
-              ? { id: `dl-${i}`, name: loc, address: 'Designated location', type: 'campus' }
-              : {
-                  id: loc.id || loc._id || `dl-${i}`,
-                  name: loc.name || loc.label || loc.location_name || loc.title || `Location ${i + 1}`,
-                  address: loc.address || loc.description || loc.area || 'Designated location',
-                  type: loc.type || 'campus',
-                  radius_m: loc.radius_m || loc.radius,
-                }
-          );
-          const designated = (designatedLocations || []).map(normLoc);
-          const locs = designated.length ? designated : geofences;
+          const fmtRadius = (r: number) => (r >= 1000 ? `${+(r / 1000).toFixed(r % 1000 ? 1 : 0)} km` : `${r} m`);
+          const locs = (designatedLocations || []).map((loc: any, i: number) => ({
+            id: loc.venue_id ?? `dl-${i}`,
+            name: loc.venue_name || `Location ${i + 1}`,
+            address: (loc.latitude != null && loc.longitude != null)
+              ? `${Number(loc.latitude).toFixed(5)}, ${Number(loc.longitude).toFixed(5)}`
+              : 'Designated location',
+            radius_m: loc.radius,
+          }));
           if (!locs.length) {
-            return <Text style={styles.fenceAddr}>No designated locations assigned yet.</Text>;
+            return <Text style={styles.fenceAddr}>No locations assigned yet.</Text>;
           }
           return locs.map((g: any) => (
             <View key={g.id} style={styles.fenceRow}>
-              <View style={[styles.fenceIcon, { backgroundColor: g.type === 'wfh' ? colors.claySky : colors.clayBlush }, clay.surfaceSoft as any]}>
-                <MaterialCommunityIcons
-                  name={g.type === 'wfh' ? 'home-outline' : g.type === 'branch' ? 'office-building-outline' : 'school-outline'}
-                  size={18}
-                  color={g.type === 'wfh' ? colors.info : colors.primary}
-                />
+              <View style={[styles.fenceIcon, { backgroundColor: colors.clayBlush }, clay.surfaceSoft as any]}>
+                <MaterialCommunityIcons name="map-marker-radius-outline" size={18} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.fenceName}>{g.name}</Text>
                 <Text style={styles.fenceAddr}>{g.address}</Text>
               </View>
-              {g.type !== 'wfh' && !!g.radius_m && (
-                <Badge label={`${g.radius_m}m`} color={colors.primary} />
-              )}
+              {!!g.radius_m && <Badge label={fmtRadius(g.radius_m)} color={colors.primary} />}
             </View>
           ));
         })()}
