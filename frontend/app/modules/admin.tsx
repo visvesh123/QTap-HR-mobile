@@ -6,16 +6,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { api } from '../../src/api';
 import { colors, radii, shadow, spacing } from '../../src/theme';
-import { Card, ScreenHeader, SectionHeader, Empty } from '../../src/ui';
+import { Card, ScreenHeader, SectionHeader } from '../../src/ui';
 
 export default function AdminPanel() {
   const router = useRouter();
   const [data, setData] = useState<any>(null);
-  const [sos, setSos] = useState<any[]>([]);
 
   useEffect(() => {
     api.adminDashboard().then(setData).catch(() => {});
-    api.activeSos().then(setSos).catch(() => {});
   }, []);
 
   if (!data) {
@@ -46,12 +44,6 @@ export default function AdminPanel() {
           <Text style={styles.heroKicker}>OPERATIONS DASHBOARD</Text>
           <Text style={styles.heroTitle}>{data.total_users} Active Users</Text>
           <Text style={styles.heroSub}>Real-time university metrics and alerts</Text>
-          {data.active_sos > 0 && (
-            <View style={styles.sosAlertBar}>
-              <MaterialCommunityIcons name="shield-alert" size={18} color={colors.white} />
-              <Text style={styles.sosAlertText}>{data.active_sos} Active SOS Alert{data.active_sos > 1 ? 's' : ''}</Text>
-            </View>
-          )}
         </LinearGradient>
 
         <SectionHeader title="Key Metrics" />
@@ -68,25 +60,6 @@ export default function AdminPanel() {
               </View>
             );
           })}
-        </View>
-
-        <SectionHeader title="Active SOS Alerts" />
-        <View style={{ paddingHorizontal: spacing.md }}>
-          {sos.length === 0 ? <Empty icon="shield-checkmark-outline" message="No active emergencies" /> : sos.map((s) => (
-            <Card key={s.id} style={{ marginBottom: spacing.sm, borderLeftWidth: 4, borderLeftColor: colors.sos }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View>
-                  <Text style={{ fontWeight: '700', color: colors.text }}>{s.user_name}</Text>
-                  <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>{s.user_role.toUpperCase()}</Text>
-                </View>
-                <Ionicons name="alert-circle" size={22} color={colors.sos} />
-              </View>
-              <Text style={{ fontSize: 12, color: colors.text, marginTop: 6 }}>{s.message}</Text>
-              <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }}>
-                {new Date(s.created_at).toLocaleString()}{s.lat ? ` • ${s.lat.toFixed(3)}, ${s.lon.toFixed(3)}` : ''}
-              </Text>
-            </Card>
-          ))}
         </View>
 
         <SectionHeader title="Quick Links" />

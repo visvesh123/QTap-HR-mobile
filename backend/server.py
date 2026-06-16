@@ -471,6 +471,59 @@ async def demo_accounts():
         {"role": "admin", "email": "admin@mahindrauniversity.edu.in", "password": "admin123", "name": "Prof. Suresh Mehta"},
     ]
 
+# ---------- LEAVE MANAGEMENT ----------
+LEAVE_ALLOCATION = {"Casual": 12, "Sick": 8, "Earned": 18}
+
+class LeaveApplyIn(BaseModel):
+    type: str
+    from_date: str   # YYYY-MM-DD
+    to_date: str     # YYYY-MM-DD
+    reason: str = ""
+
+def _days_between(a: str, b: str) -> int:
+    try:
+        d1 = datetime.strptime(a, "%Y-%m-%d").date()
+        d2 = datetime.strptime(b, "%Y-%m-%d").date()
+        return max(1, (d2 - d1).days + 1)
+    except Exception:
+        return 1
+
+@api.get("/leave/summary")
+async def leave_summary(user: dict = Depends(get_current_user)):
+    reqs = await db.leave_requests.find({"user_id": user["id"]}).sort("created_at", -1).to_list(100)
+    for r in reqs:
+        r.pop("_id", None)
+    used = {t: 0 for t in LEAVE_ALLOCATION}
+    for r in reqs:
+        if r.get("status") == "Approved" and r.get("type") in used:
+            used[r["type"]] += r.get("days", 0)
+    balances = [
+        {"type": t, "total": total, "used": used[t], "remaining": total - used[t]}
+        for t, total in LEAVE_ALLOCATION.items()
+    ]
+    return {"balances": balances, "requests": reqs}
+
+@api.post("/leave/apply")
+async def leave_apply(body: LeaveApplyIn, user: dict = Depends(get_current_user)):
+    if body.type not in LEAVE_ALLOCATION:
+        raise HTTPException(status_code=400, detail="Invalid leave type")
+    days = _days_between(body.from_date, body.to_date)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "user_name": user.get("name"),
+        "type": body.type,
+        "from_date": body.from_date,
+        "to_date": body.to_date,
+        "days": days,
+        "reason": body.reason,
+        "status": "Pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.leave_requests.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
 # ---------- WEATHER (Open-Meteo, no API key) ----------
 HYD_LAT, HYD_LON = 17.385, 78.4867
 WMO_CONDITIONS = {

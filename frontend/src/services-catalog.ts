@@ -33,7 +33,6 @@ export const ALL_SERVICES: ServiceItem[] = [
 
   // Communication
   { key: 'alerts', label: 'Alerts', icon: 'bullhorn-outline', iconLib: 'mci', color: '#6366F1', route: '/(tabs)/alerts', roles: ['student', 'staff', 'admin'] },
-  { key: 'sos', label: 'SOS', icon: 'shield-alert-outline', iconLib: 'mci', color: '#EF4444', route: '/modules/sos', roles: ['student', 'staff', 'admin'] },
 
   // Admin only
   { key: 'admin-panel', label: 'Admin Panel', icon: 'view-dashboard-outline', iconLib: 'mci', color: '#7D3ECF', route: '/modules/admin', roles: ['admin'] },
@@ -58,7 +57,15 @@ export const SECTIONED_SERVICES = (role: string, department?: string) => {
     { title: 'Academics', items: inSection(['examinations', 'library', 'results']) },
     { title: 'Campus Life', items: inSection(['hostel', 'mess', 'events', 'certificates']) },
     { title: 'Campus Services', items: inSection(['campus-map', 'visitor', 'attendance', 'parcel', 'gate']) },
-    { title: 'Communication', items: inSection(['alerts', 'sos']) },
+    { title: 'Communication', items: inSection(['alerts']) },
     { title: 'Administration', items: inSection(['admin-panel', 'gate-logs']) },
   ].filter((s) => s.items.length > 0);
 };
+
+// Dedicated, fixed list shown in the Services tab.
+export const TAB_SERVICES: ServiceItem[] = [
+  { key: 'attendance', label: 'Mark Attendance', icon: 'map-marker-account-outline', iconLib: 'mci', color: '#06B6D4', route: '/modules/attendance', roles: ['student', 'staff', 'admin'] },
+  { key: 'leave', label: 'Leaves', icon: 'calendar-account-outline', iconLib: 'mci', color: '#7D3ECF', route: '/modules/leave', roles: ['student', 'staff', 'admin'] },
+  { key: 'visitor', label: 'Visitors', icon: 'badge-account-horizontal-outline', iconLib: 'mci', color: '#3B82F6', route: '/modules/visitor', roles: ['student', 'staff', 'admin'] },
+  { key: 'mess', label: 'Mess', icon: 'silverware-fork-knife', iconLib: 'mci', color: '#16A34A', route: '/modules/mess', roles: ['student', 'staff', 'admin'] },
+];

@@ -118,4 +118,9 @@ export const api = {
 
   // weather
   weather: () => request<{ city: string; temp_c: number | null; high_c: number | null; low_c: number | null; code: number | null; condition: string | null; unavailable?: boolean }>('GET', '/weather'),
+
+  // leave
+  leaveSummary: () => request<{ balances: any[]; requests: any[] }>('GET', '/leave/summary'),
+  leaveApply: (payload: { type: string; from_date: string; to_date: string; reason: string }) =>
+    request<any>('POST', '/leave/apply', payload),
 };

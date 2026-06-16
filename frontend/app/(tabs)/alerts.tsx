@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { api } from '../../src/api';
-import { colors, radii, shadow, spacing, typo } from '../../src/theme';
+import { colors, radii, spacing, typo } from '../../src/theme';
 import { Card, Badge, Empty } from '../../src/ui';
 
 const TYPE_META: Record<string, { color: string; icon: any; lib: 'ion' | 'mci' }> = {
@@ -14,8 +13,43 @@ const TYPE_META: Record<string, { color: string; icon: any; lib: 'ion' | 'mci' }
   urgent: { color: colors.sos, icon: 'alert-circle', lib: 'ion' },
 };
 
+const FEATURED = {
+  banner: 'https://customer-assets.emergentagent.com/job_6e34b5bc-d1ea-497f-9b38-6e61f8c9d982/artifacts/fkyl434x_DINNER%20INVITATION.jpeg',
+  title: 'VC Dinner — 10th June 2026',
+  location: 'Huts & Hive, Kompally',
+  body: `Dear all,
+
+Get ready for some fun, food, laughter, and unforgettable memories because we're all set to chill together on 10th June 2026 at Huts & Hive, Kompally 🎉🥳.
+
+Kindly fill out the RSVP form shared below to help us with the event arrangements.
+VC Dinner on 10th June 2026 – Fill out form
+
+The form also includes a section for transportation requirements. Please note that transport facility will be available only for 40 employees and will be allotted on a first-come, first-served basis.
+We request you to submit your responses at the earliest to enable smooth coordination.
+
+P.S.: This one's strictly an in-house production; guest appearances and extended universes are temporarily suspended for the evening 😄.`,
+};
+
+function FeaturedAnnouncement() {
+  return (
+    <Card style={styles.featuredCard} testID="featured-announcement">
+      <Image source={{ uri: FEATURED.banner }} style={styles.banner} resizeMode="cover" />
+      <View style={styles.featuredBody}>
+        <View style={styles.featuredTopRow}>
+          <Badge label="EVENT" color="#EC4899" />
+          <View style={styles.locRow}>
+            <Ionicons name="location-outline" size={13} color={colors.textMuted} />
+            <Text style={styles.featuredLoc}>{FEATURED.location}</Text>
+          </View>
+        </View>
+        <Text style={styles.featuredTitle}>{FEATURED.title}</Text>
+        <Text style={styles.featuredText}>{FEATURED.body}</Text>
+      </View>
+    </Card>
+  );
+}
+
 export default function Alerts() {
-  const router = useRouter();
   const [data, setData] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -37,21 +71,14 @@ export default function Alerts() {
           <Text style={styles.title}>Alerts & Announcements</Text>
           <Text style={styles.subtitle}>Stay updated with campus news</Text>
         </View>
-        <TouchableOpacity
-          style={styles.sosBtn}
-          onPress={() => router.push('/modules/sos')}
-          testID="alerts-sos-btn"
-        >
-          <MaterialCommunityIcons name="shield-alert-outline" size={18} color={colors.white} />
-          <Text style={styles.sosBtnText}>SOS</Text>
-        </TouchableOpacity>
       </View>
 
       <FlatList
         data={data}
         keyExtractor={(it) => it.id}
         contentContainerStyle={{ padding: spacing.md, gap: spacing.sm }}
-        ListEmptyComponent={<Empty icon="notifications-off-outline" message="No alerts at the moment" />}
+        ListHeaderComponent={<FeaturedAnnouncement />}
+        ListEmptyComponent={null}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         renderItem={({ item }) => {
           const meta = TYPE_META[item.type] ?? TYPE_META.info;
@@ -88,11 +115,16 @@ const styles = StyleSheet.create({
   },
   title: { ...typo.h2, color: colors.text },
   subtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
-  sosBtn: {
-    backgroundColor: colors.sos, flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
-  },
-  sosBtnText: { color: colors.white, fontWeight: '700', fontSize: 12 },
+
+  featuredCard: { padding: 0, overflow: 'hidden' },
+  banner: { width: '100%', aspectRatio: 3458 / 4292 },
+  featuredBody: { padding: spacing.md },
+  featuredTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  locRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  featuredLoc: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
+  featuredTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginTop: 8 },
+  featuredText: { fontSize: 13, color: colors.textSecondary, marginTop: 8, lineHeight: 20 },
+
   alertIcon: {
     width: 40, height: 40, borderRadius: 20,
     alignItems: 'center', justifyContent: 'center',

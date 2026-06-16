@@ -8,8 +8,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/auth';
 import { api } from '../../src/api';
 import { colors, radii, spacing, BRAND, clay } from '../../src/theme';
-import { ServiceTile, SectionHeader, Card } from '../../src/ui';
-import { SECTIONED_SERVICES } from '../../src/services-catalog';
+import { Card } from '../../src/ui';
 import MessLiveCard from '../../src/components/MessLiveCard';
 
 const CAMPUS_IMG = 'https://customer-assets.emergentagent.com/job_6e34b5bc-d1ea-497f-9b38-6e61f8c9d982/artifacts/08bgdgj4_image.png';
@@ -66,7 +65,6 @@ export default function Home() {
   };
 
   if (!user) return null;
-  const sections = SECTIONED_SERVICES(user.role, user.department);
 
   const now = new Date();
   const hour = now.getHours();
@@ -187,7 +185,7 @@ export default function Home() {
                 <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: 8 }}>
                   <Stat label="Students" value={stats.total_students} />
                   <Stat label="Staff" value={stats.total_staff} />
-                  <Stat label="Active SOS" value={stats.active_sos} color={colors.sos} />
+                  <Stat label="Visitors" value={stats.total_visitors} />
                 </View>
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: spacing.md }}>
                   <TouchableOpacity
@@ -211,52 +209,8 @@ export default function Home() {
           )}
         </View>
 
-        {/* Promotional banner */}
-        <TouchableOpacity
-          activeOpacity={0.9}
-          style={styles.promoWrap}
-          onPress={() => router.push('/modules/events')}
-          testID="promo-events"
-        >
-          <Image
-            source={{ uri: 'https://images.pexels.com/photos/32213218/pexels-photo-32213218.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940' }}
-            style={styles.promoImg}
-          />
-          <LinearGradient
-            colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.85)']}
-            style={styles.promoOverlay}
-          >
-            <Text style={styles.promoKicker}>EVENTS & CLUBS</Text>
-            <Text style={styles.promoTitle}>TechFest 2026 — Registrations Open</Text>
-            <View style={styles.promoBtn}>
-              <Text style={styles.promoBtnText}>Explore</Text>
-              <Ionicons name="arrow-forward" size={14} color={colors.primary} />
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-
         {/* Mess live capacity */}
         <MessLiveCard />
-
-        {/* Sectioned services */}
-        {sections.map((section) => (
-          <View key={section.title}>
-            <SectionHeader title={section.title} />
-            <View style={styles.grid}>
-              {section.items.map((s) => (
-                <ServiceTile
-                  key={s.key}
-                  label={s.label}
-                  icon={s.icon}
-                  iconLib={s.iconLib}
-                  color={s.color}
-                  onPress={() => router.push(s.route as any)}
-                  testID={`service-tile-${s.key}`}
-                />
-              ))}
-            </View>
-          </View>
-        ))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -268,18 +222,6 @@ const Stat = ({ label, value, color }: { label: string; value: any; color?: stri
     <Text style={styles.statLabel}>{label}</Text>
   </View>
 );
-
-const QuickAction = ({ icon, label, onPress, iconLib = 'mci' }: any) => {
-  const Icon = iconLib === 'ion' ? Ionicons : MaterialCommunityIcons;
-  return (
-    <TouchableOpacity style={styles.quickItem} onPress={onPress} activeOpacity={0.8} testID={`quick-${label.toLowerCase().replace(/\s+/g, '-')}`}>
-      <View style={styles.quickIcon}>
-        <Icon name={icon} size={22} color={colors.primary} />
-      </View>
-      <Text style={styles.quickLabel}>{label}</Text>
-    </TouchableOpacity>
-  );
-};
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.clayBg },
