@@ -35,3 +35,7 @@ Plus: Login (role-gated), Splash, Role select, Profile/Settings, Admin Console w
 
 ## Demo accounts
 See `/app/memory/test_credentials.md`.
+
+## Changelog
+- 2026-06-16: Attendance History redesigned from "weekly streak" to an **Apple-style month calendar** (`/app/frontend/app/modules/attendance.tsx`). Month grid with today highlighted in filled crimson circle, colored status dots per day (Present/Late/WFH/Absent), tappable days with selection ring, prev/next month nav, and a selected-day detail card. Also fixed a render crash from an undefined `WeekStreak` reference.
+- Pending: Sora font not applying on web (P0); Leave module native date picker + Admin approval flow (P1).

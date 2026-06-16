@@ -394,70 +394,132 @@ const TodayTab = ({
   );
 };
 
-// ---------- HISTORY ----------
+// ---------- HISTORY (Apple-style month calendar) ----------
+const CAL_STATUS_COLOR: Record<string, string> = {
+  present: '#16A34A',
+  late:    '#F59E0B',
+  half_day:'#F97316',
+  wfh:     '#3B82F6',
+  absent:  '#EF4444',
+};
+const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+function pad2(n: number) { return String(n).padStart(2, '0'); }
+function isoFor(y: number, m: number, d: number) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
+
 const HistoryTab = ({ items }: { items: any[] }) => {
-  // group by date
+  const todayISO = useMemo(() => {
+    const t = new Date();
+    return isoFor(t.getFullYear(), t.getMonth(), t.getDate());
+  }, []);
+
+  const [cursor, setCursor] = useState(() => new Date());
+  const [selected, setSelected] = useState<string>(todayISO);
+
+  // group accepted events by date
   const byDay = useMemo(() => {
     const m: Record<string, any[]> = {};
     items.forEach((it) => {
       const d = (it.timestamp || '').slice(0, 10);
+      if (!d) return;
       (m[d] = m[d] || []).push(it);
     });
-    return Object.entries(m).sort((a, b) => (a[0] < b[0] ? 1 : -1));
+    return m;
   }, [items]);
 
-  // Build last-7-day streak strip
-  const weekDays = useMemo(() => {
-    const today = new Date();
-    const days: { date: string; status: any }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      const iso = d.toISOString().slice(0, 10);
-      const evts = byDay.find(([k]) => k === iso)?.[1] || [];
-      const inE = evts.find((x: any) => x.type === 'in' && x.accepted);
-      const dow = d.getDay();
-      let status: any = 'absent';
-      if (dow === 0 || dow === 6) status = inE ? (inE.attendance_type === 'wfh' ? 'wfh' : 'present') : 'weekend';
-      else if (inE) {
-        if (inE.attendance_type === 'wfh') status = 'wfh';
-        else if (inE.status === 'late') status = 'late';
-        else status = 'present';
-      }
-      days.push({ date: iso, status });
+  // derive a single status for any date
+  const statusFor = useCallback((iso: string): string | null => {
+    const evts = byDay[iso] || [];
+    const inE = evts.find((x: any) => x.type === 'in' && x.accepted);
+    const d = new Date(iso + 'T00:00:00');
+    const dow = d.getDay();
+    if (iso > todayISO) return null; // future
+    if (inE) {
+      if (inE.attendance_type === 'wfh') return 'wfh';
+      if (inE.status === 'late') return 'late';
+      if (inE.status === 'half_day') return 'half_day';
+      return 'present';
     }
-    return days;
-  }, [byDay]);
+    if (dow === 0 || dow === 6) return null; // weekend, no dot
+    return 'absent';
+  }, [byDay, todayISO]);
 
-  // Compute streak
-  const streak = useMemo(() => {
-    let count = 0;
-    for (let i = weekDays.length - 1; i >= 0; i--) {
-      const st = weekDays[i].status;
-      if (st === 'present' || st === 'late' || st === 'wfh') count++;
-      else if (st === 'weekend') continue;
-      else break;
-    }
-    return count;
-  }, [weekDays]);
+  // build month grid cells
+  const cells = useMemo(() => {
+    const y = cursor.getFullYear();
+    const m = cursor.getMonth();
+    const startDow = new Date(y, m, 1).getDay();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const arr: ({ day: number; iso: string } | null)[] = [];
+    for (let i = 0; i < startDow; i++) arr.push(null);
+    for (let d = 1; d <= daysInMonth; d++) arr.push({ day: d, iso: isoFor(y, m, d) });
+    while (arr.length % 7 !== 0) arr.push(null);
+    return arr;
+  }, [cursor]);
 
-  if (!items.length) return <Empty icon="time-outline" message="No attendance records yet" />;
+  const monthLabel = cursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+  const goMonth = (delta: number) => {
+    setCursor((c) => new Date(c.getFullYear(), c.getMonth() + delta, 1));
+  };
+
+  if (!items.length) return <Empty icon="calendar-outline" message="No attendance records yet" />;
 
   return (
     <View>
-      {/* Week streak header */}
       <Card>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <View>
-            <Text style={styles.cardLabel}>THIS WEEK</Text>
-            <Text style={styles.weekTitle}>Your attendance streak</Text>
-          </View>
-          <View style={styles.streakChip}>
-            <MaterialCommunityIcons name="fire" size={16} color="#F97316" />
-            <Text style={styles.streakText}>{streak} day{streak === 1 ? '' : 's'}</Text>
-          </View>
+        {/* Month header */}
+        <View style={styles.calHead}>
+          <TouchableOpacity onPress={() => goMonth(-1)} testID="cal-prev" style={styles.calNavBtn} hitSlop={10}>
+            <Ionicons name="chevron-back" size={22} color={colors.primary} />
+          </TouchableOpacity>
+          <Text style={styles.calMonth}>{monthLabel}</Text>
+          <TouchableOpacity onPress={() => goMonth(1)} testID="cal-next" style={styles.calNavBtn} hitSlop={10}>
+            <Ionicons name="chevron-forward" size={22} color={colors.primary} />
+          </TouchableOpacity>
         </View>
-        <WeekStreak days={weekDays} />
+
+        {/* Weekday labels */}
+        <View style={styles.calWeekRow}>
+          {WEEKDAY_LABELS.map((w, i) => (
+            <Text key={i} style={styles.calWeekday}>{w}</Text>
+          ))}
+        </View>
+
+        {/* Day grid */}
+        <View style={styles.calGrid}>
+          {cells.map((cell, i) => {
+            if (!cell) return <View key={`e${i}`} style={styles.calCell} />;
+            const isToday = cell.iso === todayISO;
+            const isSelected = cell.iso === selected;
+            const st = statusFor(cell.iso);
+            const dotColor = st ? CAL_STATUS_COLOR[st] : null;
+            return (
+              <TouchableOpacity
+                key={cell.iso}
+                style={styles.calCell}
+                activeOpacity={0.7}
+                onPress={() => setSelected(cell.iso)}
+                testID={`cal-day-${cell.iso}`}
+              >
+                <View style={[
+                  styles.calDayCircle,
+                  isToday && styles.calDayToday,
+                  !isToday && isSelected && styles.calDaySelected,
+                ]}>
+                  <Text style={[
+                    styles.calDayNum,
+                    isToday && styles.calDayNumToday,
+                    !isToday && isSelected && styles.calDayNumSelected,
+                  ]}>{cell.day}</Text>
+                </View>
+                <View style={[styles.calDot, dotColor ? { backgroundColor: dotColor } : { backgroundColor: 'transparent' }]} />
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Legend */}
         <View style={styles.legendRow}>
           {[
             { c: '#16A34A', l: 'Present' },
@@ -473,57 +535,63 @@ const HistoryTab = ({ items }: { items: any[] }) => {
         </View>
       </Card>
 
+      {/* Selected day detail */}
       <View style={{ height: spacing.md }} />
-
-      {byDay.map(([day, evts]) => {
-        const inE = evts.find((x) => x.type === 'in' && x.accepted);
-        const outE = [...evts].reverse().find((x) => x.type === 'out' && x.accepted);
-        const stat = inE?.status || 'absent';
-        const sm = STATUS_META[stat];
-        const att_type = inE?.attendance_type as AttType | undefined;
-        const dur = (inE && outE)
-          ? ((new Date(outE.timestamp).getTime() - new Date(inE.timestamp).getTime()) / 3600000).toFixed(1)
-          : null;
-        return (
-          <Card key={day} style={{ marginBottom: spacing.sm }} testID={`day-${day}`}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-              <View style={[styles.dayBadge, { backgroundColor: `${sm.color}1A` }]}>
-                <Text style={[styles.dayBadgeNum, { color: sm.color }]}>
-                  {new Date(day + 'T00:00:00').getDate()}
-                </Text>
-                <Text style={[styles.dayBadgeMon, { color: sm.color }]}>
-                  {new Date(day + 'T00:00:00').toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.dayLabel}>
-                  {new Date(day + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' })}
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                  <Ionicons name="log-in-outline" size={11} color={colors.textMuted} />
-                  <Text style={styles.daySub}>{fmtTime(inE?.timestamp)}</Text>
-                  <Text style={styles.daySub}>·</Text>
-                  <Ionicons name="log-out-outline" size={11} color={colors.textMuted} />
-                  <Text style={styles.daySub}>{fmtTime(outE?.timestamp)}</Text>
-                  {dur && (
-                    <>
-                      <Text style={styles.daySub}>·</Text>
-                      <Text style={[styles.daySub, { color: colors.primary, fontWeight: '700' }]}>{dur}h</Text>
-                    </>
-                  )}
-                </View>
-              </View>
-              <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                <Badge label={sm.label} color={sm.color} />
-                {att_type && (
-                  <Text style={styles.attTypeText}>{TYPE_META[att_type]?.label}</Text>
-                )}
-              </View>
-            </View>
-          </Card>
-        );
-      })}
+      <DayDetail iso={selected} evts={byDay[selected] || []} status={statusFor(selected)} />
     </View>
+  );
+};
+
+const DayDetail = ({ iso, evts, status }: { iso: string; evts: any[]; status: string | null }) => {
+  const dateObj = new Date(iso + 'T00:00:00');
+  const inE = evts.find((x) => x.type === 'in' && x.accepted);
+  const outE = [...evts].reverse().find((x) => x.type === 'out' && x.accepted);
+  const att_type = inE?.attendance_type as AttType | undefined;
+  const dur = (inE && outE)
+    ? ((new Date(outE.timestamp).getTime() - new Date(inE.timestamp).getTime()) / 3600000).toFixed(1)
+    : null;
+  const sm = status ? (STATUS_META[status] || { label: status, color: colors.textMuted }) : null;
+  const color = sm?.color || colors.textMuted;
+
+  return (
+    <Card testID={`day-detail-${iso}`}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+        <View style={[styles.dayBadge, { backgroundColor: `${color}1A` }]}>
+          <Text style={[styles.dayBadgeNum, { color }]}>{dateObj.getDate()}</Text>
+          <Text style={[styles.dayBadgeMon, { color }]}>
+            {dateObj.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}
+          </Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.dayLabel}>
+            {dateObj.toLocaleDateString(undefined, { weekday: 'long' })}
+          </Text>
+          {inE ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+              <Ionicons name="log-in-outline" size={11} color={colors.textMuted} />
+              <Text style={styles.daySub}>{fmtTime(inE?.timestamp)}</Text>
+              <Text style={styles.daySub}>·</Text>
+              <Ionicons name="log-out-outline" size={11} color={colors.textMuted} />
+              <Text style={styles.daySub}>{fmtTime(outE?.timestamp)}</Text>
+              {dur && (
+                <>
+                  <Text style={styles.daySub}>·</Text>
+                  <Text style={[styles.daySub, { color: colors.primary, fontWeight: '700' }]}>{dur}h</Text>
+                </>
+              )}
+            </View>
+          ) : (
+            <Text style={[styles.daySub, { marginTop: 2 }]}>
+              {status === 'absent' ? 'No check-in recorded' : 'Weekend / no working record'}
+            </Text>
+          )}
+        </View>
+        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+          {sm && <Badge label={sm.label} color={sm.color} />}
+          {att_type && <Text style={styles.attTypeText}>{TYPE_META[att_type]?.label}</Text>}
+        </View>
+      </View>
+    </Card>
   );
 };
 
@@ -1227,6 +1295,38 @@ const styles = StyleSheet.create({
   daySub: { fontSize: 11, color: colors.textSecondary },
   attTypeText: { fontSize: 10, color: colors.textMuted, fontWeight: '600' },
   weekTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginTop: 2 },
+  // Apple-style month calendar
+  calHead: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  calNavBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.primaryBg,
+  },
+  calMonth: { fontSize: 18, fontWeight: '800', color: colors.text },
+  calWeekRow: { flexDirection: 'row', marginBottom: 4 },
+  calWeekday: {
+    flex: 1, textAlign: 'center',
+    fontSize: 11, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.5,
+  },
+  calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calCell: {
+    width: `${100 / 7}%`,
+    alignItems: 'center', justifyContent: 'flex-start',
+    paddingVertical: 4, height: 52,
+  },
+  calDayCircle: {
+    width: 34, height: 34, borderRadius: 17,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  calDayToday: { backgroundColor: colors.primary },
+  calDaySelected: { borderWidth: 1.5, borderColor: colors.primary },
+  calDayNum: { fontSize: 15, fontWeight: '600', color: colors.text },
+  calDayNumToday: { color: colors.white, fontWeight: '800' },
+  calDayNumSelected: { color: colors.primary, fontWeight: '800' },
+  calDot: { width: 6, height: 6, borderRadius: 3, marginTop: 3 },
   streakChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: '#FFEDD5',
