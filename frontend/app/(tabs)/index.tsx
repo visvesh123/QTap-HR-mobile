@@ -126,16 +126,6 @@ export default function Home() {
           </LinearGradient>
         </ImageBackground>
 
-        {/* Quick Actions */}
-        {user.role === 'student' && (
-          <View style={styles.quickRow} testID="quick-actions">
-            <QuickAction icon="qrcode" label="Gate Pass" onPress={() => router.push('/modules/gate')} />
-            <QuickAction icon="package-variant-closed" label="My Parcels" onPress={() => router.push('/modules/parcel')} />
-            <QuickAction icon="bed" label="My Hostel" onPress={() => router.push('/modules/hostel')} />
-            <QuickAction icon="wallet" iconLib="ion" label="Wallet" onPress={() => router.push('/(tabs)/wallet')} />
-          </View>
-        )}
-
         {/* Role action card (moved down from the banner) */}
         <View style={styles.actionWrap}>
           {user.role === 'student' && (
