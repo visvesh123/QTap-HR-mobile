@@ -526,6 +526,7 @@ async def leave_apply(body: LeaveApplyIn, user: dict = Depends(get_current_user)
 
 # ---------- WEATHER (Open-Meteo, no API key) ----------
 HYD_LAT, HYD_LON = 17.385, 78.4867
+_WEATHER_CACHE: dict = {}
 WMO_CONDITIONS = {
     0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
     45: "Foggy", 48: "Rime fog", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
@@ -537,7 +538,13 @@ WMO_CONDITIONS = {
 
 @api.get("/weather")
 async def weather():
-    """Current temperature + today's high for the campus city (Hyderabad), via Open-Meteo."""
+    """Current temperature + today's high/low for Hyderabad via Open-Meteo.
+    Cached 30 min in-memory; last-good reading persisted in DB so the widget stays
+    populated even when the upstream free tier is rate-limited."""
+    now_ts = datetime.now(timezone.utc).timestamp()
+    cached = _WEATHER_CACHE.get("data")
+    if cached and (now_ts - _WEATHER_CACHE.get("ts", 0)) < 1800:
+        return cached
     try:
         async with httpx.AsyncClient(timeout=6) as client:
             r = await client.get("https://api.open-meteo.com/v1/forecast", params={
@@ -556,7 +563,7 @@ async def weather():
         lows = daily.get("temperature_2m_min") or []
         high = highs[0] if highs else None
         low = lows[0] if lows else None
-        return {
+        result = {
             "city": "Hyderabad",
             "temp_c": round(temp) if temp is not None else None,
             "high_c": round(high) if high is not None else None,
@@ -564,8 +571,17 @@ async def weather():
             "code": int(code) if code is not None else None,
             "condition": WMO_CONDITIONS.get(int(code), "—") if code is not None else None,
         }
+        _WEATHER_CACHE["data"] = result
+        _WEATHER_CACHE["ts"] = now_ts
+        await db.app_meta.update_one({"key": "weather"}, {"$set": {"data": result, "ts": now_ts}}, upsert=True)
+        return result
     except Exception as e:
         logging.warning(f"weather fetch failed: {e}")
+        if cached:
+            return cached
+        persisted = await db.app_meta.find_one({"key": "weather"})
+        if persisted and persisted.get("data"):
+            return {**persisted["data"], "stale": True}
         return {"city": "Hyderabad", "temp_c": None, "high_c": None, "low_c": None, "code": None, "condition": None, "unavailable": True}
 
 # ---------- EXAMINATIONS ----------

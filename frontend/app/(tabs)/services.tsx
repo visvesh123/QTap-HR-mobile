@@ -1,49 +1,119 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/auth';
-import { colors, spacing, typo } from '../../src/theme';
-import { ServiceTile } from '../../src/ui';
+import { colors, radii, spacing, shadow, BRAND } from '../../src/theme';
 import { TAB_SERVICES } from '../../src/services-catalog';
+
+const CAPTION: Record<string, string> = {
+  attendance: 'Check in & out',
+  leave: 'Apply & track',
+  visitor: 'Invite guests',
+  mess: "Today's menu",
+};
+
+const GAP = 12;
+const H_PAD = spacing.md;
+const COLS = 3;
+const SCREEN_W = Dimensions.get('window').width;
+const TILE_W = (SCREEN_W - H_PAD * 2 - GAP * (COLS - 1)) / COLS;
 
 export default function Services() {
   const router = useRouter();
   const { user } = useAuth();
   if (!user) return null;
 
+  const firstName = user.role === 'admin' ? 'Admin' : user.name.replace(/^(Dr\.?|Mr\.?|Mrs\.?|Ms\.?|Prof\.?)\s+/i, '').split(' ')[0];
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Services</Text>
-        <Text style={styles.subtitle}>Quick access to your campus tools</Text>
-      </View>
-      <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }} showsVerticalScrollIndicator={false}>
+        {/* Branded header */}
+        <LinearGradient
+          colors={[colors.primaryLight, colors.primary, colors.primaryDark]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={styles.hero}
+        >
+          <View style={styles.heroTextWrap}>
+            <Text style={styles.heroKicker}>MUOne · SERVICES</Text>
+            <Text style={styles.heroTitle}>Hi {firstName}, what would you{'\n'}like to do today?</Text>
+          </View>
+          <MaterialCommunityIcons name="apps" size={64} color="rgba(255,255,255,0.18)" style={styles.heroGlyph} />
+        </LinearGradient>
+
+        {/* 3-column bento grid */}
         <View style={styles.grid}>
-          {TAB_SERVICES.map((s) => (
-            <ServiceTile
-              key={s.key}
-              label={s.label}
-              icon={s.icon}
-              iconLib={s.iconLib}
-              color={s.color}
-              onPress={() => router.push(s.route as any)}
-              testID={`service-tile-${s.key}`}
-            />
-          ))}
+          {TAB_SERVICES.map((s) => {
+            const Icon = s.iconLib === 'mci' ? MaterialCommunityIcons : Ionicons;
+            return (
+              <TouchableOpacity
+                key={s.key}
+                style={[styles.tile, { width: TILE_W }]}
+                onPress={() => router.push(s.route as any)}
+                activeOpacity={0.85}
+                testID={`service-tile-${s.key}`}
+              >
+                <View style={[styles.iconChip, { backgroundColor: `${s.color}1A` }]}>
+                  <Icon name={s.icon} size={26} color={s.color} />
+                </View>
+                <Text style={styles.tileLabel} numberOfLines={1}>{s.label}</Text>
+                <Text style={styles.tileCaption} numberOfLines={1}>{CAPTION[s.key]}</Text>
+                <View style={[styles.accent, { backgroundColor: s.color }]} />
+              </TouchableOpacity>
+            );
+          })}
         </View>
+
+        <Text style={styles.footnote}>More services rolling out across {BRAND.name} soon.</Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: spacing.md, paddingVertical: spacing.md },
-  title: { ...typo.h2, color: colors.text },
-  subtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
-  grid: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    paddingHorizontal: spacing.md, gap: spacing.sm,
+  container: { flex: 1, backgroundColor: colors.clayBg },
+  hero: {
+    margin: spacing.md,
+    borderRadius: radii.xl,
+    padding: spacing.lg,
+    overflow: 'hidden',
+    minHeight: 120,
+    justifyContent: 'center',
+    ...shadow.cardHeavy,
   },
+  heroTextWrap: { paddingRight: 56 },
+  heroKicker: { fontSize: 11, fontWeight: '800', color: colors.gold, letterSpacing: 1.5 },
+  heroTitle: { fontSize: 21, fontWeight: '800', color: colors.white, marginTop: 6, lineHeight: 27, letterSpacing: -0.3 },
+  heroGlyph: { position: 'absolute', right: 12, bottom: 6 },
+
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: H_PAD,
+    gap: GAP,
+  },
+  tile: {
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    minHeight: 132,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    ...shadow.card,
+  },
+  iconChip: {
+    width: 54, height: 54, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 10,
+  },
+  tileLabel: { fontSize: 13, fontWeight: '800', color: colors.text, textAlign: 'center' },
+  tileCaption: { fontSize: 10.5, color: colors.textMuted, marginTop: 2, textAlign: 'center' },
+  accent: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3 },
+
+  footnote: { fontSize: 12, color: colors.textMuted, textAlign: 'center', marginTop: spacing.lg, paddingHorizontal: spacing.lg },
 });

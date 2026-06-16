@@ -1,10 +1,17 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, Image } from 'react-native';
+import {
+  View, Text, StyleSheet, ScrollView, RefreshControl, Image, TouchableOpacity,
+  LayoutAnimation, Platform, UIManager,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../../src/api';
-import { colors, radii, spacing, typo } from '../../src/theme';
-import { Card, Badge, Empty } from '../../src/ui';
+import { colors, radii, spacing, typo, shadow } from '../../src/theme';
+import { Badge } from '../../src/ui';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const TYPE_META: Record<string, { color: string; icon: any; lib: 'ion' | 'mci' }> = {
   info: { color: colors.info, icon: 'information-outline', lib: 'mci' },
@@ -14,8 +21,11 @@ const TYPE_META: Record<string, { color: string; icon: any; lib: 'ion' | 'mci' }
 };
 
 const FEATURED = {
-  banner: 'https://customer-assets.emergentagent.com/job_6e34b5bc-d1ea-497f-9b38-6e61f8c9d982/artifacts/fkyl434x_DINNER%20INVITATION.jpeg',
+  id: 'featured-vc-dinner',
+  type: 'event',
   title: 'VC Dinner — 10th June 2026',
+  image: 'https://customer-assets.emergentagent.com/job_6e34b5bc-d1ea-497f-9b38-6e61f8c9d982/artifacts/fkyl434x_DINNER%20INVITATION.jpeg',
+  imageRatio: 3458 / 4292,
   location: 'Huts & Hive, Kompally',
   body: `Dear all,
 
@@ -30,33 +40,65 @@ We request you to submit your responses at the earliest to enable smooth coordin
 P.S.: This one's strictly an in-house production; guest appearances and extended universes are temporarily suspended for the evening 😄.`,
 };
 
-function FeaturedAnnouncement() {
+type Item = {
+  id: string; type: string; title: string;
+  image?: string | null; imageRatio?: number; body: string;
+  location?: string; date?: string;
+};
+
+function AccordionItem({ item, expanded, onToggle }: { item: Item; expanded: boolean; onToggle: () => void }) {
+  const meta = TYPE_META[item.type] ?? TYPE_META.info;
+  const Icon = meta.lib === 'mci' ? MaterialCommunityIcons : Ionicons;
   return (
-    <Card style={styles.featuredCard} testID="featured-announcement">
-      <Image source={{ uri: FEATURED.banner }} style={styles.banner} resizeMode="cover" />
-      <View style={styles.featuredBody}>
-        <View style={styles.featuredTopRow}>
-          <Badge label="EVENT" color="#EC4899" />
-          <View style={styles.locRow}>
-            <Ionicons name="location-outline" size={13} color={colors.textMuted} />
-            <Text style={styles.featuredLoc}>{FEATURED.location}</Text>
-          </View>
+    <View style={[styles.card, expanded && styles.cardExpanded]}>
+      <TouchableOpacity
+        style={styles.headRow}
+        activeOpacity={0.7}
+        onPress={onToggle}
+        testID={`accordion-${item.id}`}
+      >
+        <View style={[styles.iconChip, { backgroundColor: `${meta.color}1A` }]}>
+          <Icon name={meta.icon} size={18} color={meta.color} />
         </View>
-        <Text style={styles.featuredTitle}>{FEATURED.title}</Text>
-        <Text style={styles.featuredText}>{FEATURED.body}</Text>
-      </View>
-    </Card>
+        <Text style={styles.headTitle} numberOfLines={expanded ? undefined : 1}>{item.title}</Text>
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={styles.body} testID={`accordion-body-${item.id}`}>
+          {!!item.image && (
+            <Image
+              source={{ uri: item.image }}
+              style={styles.bodyImage}
+              resizeMode="contain"
+            />
+          )}
+          <View style={styles.metaRow}>
+            <Badge label={item.type.toUpperCase()} color={meta.color} />
+            {!!item.location && (
+              <View style={styles.locRow}>
+                <Ionicons name="location-outline" size={13} color={colors.textMuted} />
+                <Text style={styles.metaText}>{item.location}</Text>
+              </View>
+            )}
+            {!!item.date && <Text style={styles.metaText}>{new Date(item.date).toLocaleDateString()}</Text>}
+          </View>
+          <Text style={styles.bodyText}>{item.body}</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
 export default function Alerts() {
-  const [data, setData] = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const res = await api.alerts();
-      setData(res);
+      setAlerts(res);
     } catch {}
   }, []);
 
@@ -64,72 +106,65 @@ export default function Alerts() {
 
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
+  const toggle = (id: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.create(220, 'easeInEaseOut', 'opacity'));
+    setOpenId((cur) => (cur === id ? null : id));
+  };
+
+  const items: Item[] = [
+    FEATURED,
+    ...alerts.map((a) => ({ id: a.id, type: a.type, title: a.title, image: null, body: a.message, date: a.created_at })),
+  ];
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Alerts & Announcements</Text>
-          <Text style={styles.subtitle}>Stay updated with campus news</Text>
-        </View>
+        <Text style={styles.title}>Alerts & Announcements</Text>
+        <Text style={styles.subtitle}>Tap a headline to read more</Text>
       </View>
 
-      <FlatList
-        data={data}
-        keyExtractor={(it) => it.id}
+      <ScrollView
         contentContainerStyle={{ padding: spacing.md, gap: spacing.sm }}
-        ListHeaderComponent={<FeaturedAnnouncement />}
-        ListEmptyComponent={null}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-        renderItem={({ item }) => {
-          const meta = TYPE_META[item.type] ?? TYPE_META.info;
-          const Icon = meta.lib === 'mci' ? MaterialCommunityIcons : Ionicons;
-          const ts = new Date(item.created_at);
-          return (
-            <Card testID={`alert-${item.id}`}>
-              <View style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' }}>
-                <View style={[styles.alertIcon, { backgroundColor: `${meta.color}1A` }]}>
-                  <Icon name={meta.icon} size={20} color={meta.color} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Badge label={item.type.toUpperCase()} color={meta.color} />
-                    <Text style={styles.time}>{ts.toLocaleDateString()}</Text>
-                  </View>
-                  <Text style={styles.alertTitle}>{item.title}</Text>
-                  <Text style={styles.alertMsg}>{item.message}</Text>
-                </View>
-              </View>
-            </Card>
-          );
-        }}
-      />
+        showsVerticalScrollIndicator={false}
+      >
+        {items.map((item) => (
+          <AccordionItem
+            key={item.id}
+            item={item}
+            expanded={openId === item.id}
+            onToggle={() => toggle(item.id)}
+          />
+        ))}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
-  },
+  header: { paddingHorizontal: spacing.md, paddingVertical: spacing.md },
   title: { ...typo.h2, color: colors.text },
   subtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
 
-  featuredCard: { padding: 0, overflow: 'hidden' },
-  banner: { width: '100%', aspectRatio: 3458 / 4292 },
-  featuredBody: { padding: spacing.md },
-  featuredTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  locRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  featuredLoc: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
-  featuredTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginTop: 8 },
-  featuredText: { fontSize: 13, color: colors.textSecondary, marginTop: 8, lineHeight: 20 },
-
-  alertIcon: {
-    width: 40, height: 40, borderRadius: 20,
-    alignItems: 'center', justifyContent: 'center',
+  card: {
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
+    ...shadow.card,
+    overflow: 'hidden',
   },
-  alertTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginTop: 6 },
-  alertMsg: { fontSize: 13, color: colors.textSecondary, marginTop: 4, lineHeight: 18 },
-  time: { fontSize: 11, color: colors.textMuted },
+  cardExpanded: { ...shadow.cardHeavy },
+  headRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    paddingHorizontal: spacing.md, paddingVertical: 14,
+  },
+  iconChip: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  headTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.text },
+
+  body: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
+  bodyImage: { width: '100%', height: 440, borderRadius: radii.md, marginBottom: spacing.sm, backgroundColor: '#FAF7F4' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: spacing.sm, flexWrap: 'wrap' },
+  locRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  metaText: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
+  bodyText: { fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
 });
