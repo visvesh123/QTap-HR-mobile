@@ -45,14 +45,8 @@ export default function Login() {
   const router = useRouter();
   const { login, setSession } = useAuth();
 
-  const [method, setMethod] = useState<Method>('password');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // password
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPw, setShowPw] = useState(false);
 
   // otp
   const [phone, setPhone] = useState('');
@@ -80,27 +74,9 @@ export default function Login() {
 
   const goHome = () => router.replace('/(tabs)');
 
-  const switchMethod = (m: Method) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setError('');
-    setMethod(m);
-  };
-
   const toggleDemos = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setDemosOpen((o) => !o);
-  };
-
-  // ----- Password -----
-  const onPasswordSubmit = async () => {
-    if (!email || !password) { setError('Please enter email and password'); return; }
-    setError(''); setLoading(true);
-    try {
-      await login(email.trim().toLowerCase(), password);
-      goHome();
-    } catch (e: any) {
-      setError(e.message || 'Login failed');
-    } finally { setLoading(false); }
   };
 
   // ----- OTP -----
@@ -178,130 +154,65 @@ export default function Login() {
             <Text style={styles.subtitle}>Mahindra University · one app for everything campus</Text>
           </View>
 
-          {/* Method segmented control */}
-          <View style={[styles.segment, clay.surfaceSoft as any]}>
-            <TouchableOpacity
-              style={[styles.segBtn, method === 'password' && styles.segBtnActive]}
-              onPress={() => switchMethod('password')}
-              testID="method-password"
-              activeOpacity={0.9}
-            >
-              <Ionicons name="lock-closed" size={15} color={method === 'password' ? colors.white : colors.clayMuted} />
-              <Text style={[styles.segText, method === 'password' && styles.segTextActive]}>Password</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.segBtn, method === 'otp' && styles.segBtnActive]}
-              onPress={() => switchMethod('otp')}
-              testID="method-otp"
-              activeOpacity={0.9}
-            >
-              <Ionicons name="chatbox-ellipses" size={15} color={method === 'otp' ? colors.white : colors.clayMuted} />
-              <Text style={[styles.segText, method === 'otp' && styles.segTextActive]}>OTP</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Form card */}
+          {/* Form card — OTP only */}
           <ClayCard style={{ marginTop: spacing.md }}>
-            {method === 'password' ? (
+            {!otpSent ? (
               <>
-                <ClayLabel style={{ marginBottom: 6 }}>Email</ClayLabel>
-                <ClayInput style={{ marginBottom: spacing.md }}>
-                  <Ionicons name="mail-outline" size={18} color={colors.clayMuted} />
-                  <TextInput
-                    style={styles.input}
-                    value={email}
-                    onChangeText={setEmail}
-                    placeholder="you@mahindrauniversity.edu.in"
-                    placeholderTextColor={colors.clayMuted}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    testID="email-input"
-                  />
-                </ClayInput>
-
-                <ClayLabel style={{ marginBottom: 6 }}>Password</ClayLabel>
+                <ClayLabel style={{ marginBottom: 6 }}>Mobile number</ClayLabel>
                 <ClayInput>
-                  <Ionicons name="lock-closed-outline" size={18} color={colors.clayMuted} />
+                  <Text style={styles.cc}>+91</Text>
                   <TextInput
                     style={styles.input}
-                    value={password}
-                    onChangeText={setPassword}
-                    placeholder="••••••••"
+                    value={phone}
+                    onChangeText={setPhone}
+                    placeholder="98765 00010"
                     placeholderTextColor={colors.clayMuted}
-                    secureTextEntry={!showPw}
-                    testID="password-input"
-                    onSubmitEditing={onPasswordSubmit}
+                    keyboardType="number-pad"
+                    maxLength={14}
+                    testID="phone-input"
                   />
-                  <TouchableOpacity onPress={() => setShowPw(!showPw)} testID="toggle-password">
-                    <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.clayMuted} />
-                  </TouchableOpacity>
                 </ClayInput>
+                <Text style={styles.helper}>We&apos;ll text you a 6-digit verification code.</Text>
 
                 {!!error && <Text style={styles.error} testID="login-error">{error}</Text>}
 
-                <PrimaryButton label="Sign In" loading={loading} onPress={onPasswordSubmit} testID="login-button" />
+                <PrimaryButton label="Send OTP" loading={loading} onPress={onSendOtp} testID="send-otp-button" />
               </>
             ) : (
               <>
-                {!otpSent ? (
-                  <>
-                    <ClayLabel style={{ marginBottom: 6 }}>Mobile number</ClayLabel>
-                    <ClayInput>
-                      <Text style={styles.cc}>+91</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={phone}
-                        onChangeText={setPhone}
-                        placeholder="98765 00010"
-                        placeholderTextColor={colors.clayMuted}
-                        keyboardType="number-pad"
-                        maxLength={14}
-                        testID="phone-input"
-                      />
-                    </ClayInput>
-                    <Text style={styles.helper}>We&apos;ll text you a 6-digit verification code.</Text>
-
-                    {!!error && <Text style={styles.error} testID="login-error">{error}</Text>}
-
-                    <PrimaryButton label="Send OTP" loading={loading} onPress={onSendOtp} testID="send-otp-button" />
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.otpHeader}>
-                      <ClayLabel>Enter OTP</ClayLabel>
-                      <TouchableOpacity onPress={resetOtp} testID="change-number">
-                        <Text style={styles.changeNum}>Change number</Text>
-                      </TouchableOpacity>
-                    </View>
-                    <ClayInput style={{ marginTop: 6 }}>
-                      <Ionicons name="keypad-outline" size={18} color={colors.clayMuted} />
-                      <TextInput
-                        style={[styles.input, styles.otpInput]}
-                        value={otp}
-                        onChangeText={setOtp}
-                        placeholder="------"
-                        placeholderTextColor={colors.clayMuted}
-                        keyboardType="number-pad"
-                        maxLength={6}
-                        testID="otp-input"
-                        onSubmitEditing={onVerifyOtp}
-                      />
-                    </ClayInput>
-                    {!!otpHint && (
-                      <View style={[styles.otpHintBox, clay.surfaceSoft as any]}>
-                        <Ionicons name="information-circle" size={14} color={colors.primary} />
-                        <Text style={styles.otpHintText}>{otpHint}</Text>
-                      </View>
-                    )}
-
-                    {!!error && <Text style={styles.error} testID="login-error">{error}</Text>}
-
-                    <PrimaryButton label="Verify & Sign In" loading={loading} onPress={onVerifyOtp} testID="verify-otp-button" />
-                    <TouchableOpacity onPress={onSendOtp} disabled={loading} style={styles.resendBtn} testID="resend-otp">
-                      <Text style={styles.resendText}>Didn&apos;t get it? Resend OTP</Text>
-                    </TouchableOpacity>
-                  </>
+                <View style={styles.otpHeader}>
+                  <ClayLabel>Enter OTP</ClayLabel>
+                  <TouchableOpacity onPress={resetOtp} testID="change-number">
+                    <Text style={styles.changeNum}>Change number</Text>
+                  </TouchableOpacity>
+                </View>
+                <ClayInput style={{ marginTop: 6 }}>
+                  <Ionicons name="keypad-outline" size={18} color={colors.clayMuted} />
+                  <TextInput
+                    style={[styles.input, styles.otpInput]}
+                    value={otp}
+                    onChangeText={setOtp}
+                    placeholder="------"
+                    placeholderTextColor={colors.clayMuted}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    testID="otp-input"
+                    onSubmitEditing={onVerifyOtp}
+                  />
+                </ClayInput>
+                {!!otpHint && (
+                  <View style={[styles.otpHintBox, clay.surfaceSoft as any]}>
+                    <Ionicons name="information-circle" size={14} color={colors.primary} />
+                    <Text style={styles.otpHintText}>{otpHint}</Text>
+                  </View>
                 )}
+
+                {!!error && <Text style={styles.error} testID="login-error">{error}</Text>}
+
+                <PrimaryButton label="Verify & Sign In" loading={loading} onPress={onVerifyOtp} testID="verify-otp-button" />
+                <TouchableOpacity onPress={onSendOtp} disabled={loading} style={styles.resendBtn} testID="resend-otp">
+                  <Text style={styles.resendText}>Didn&apos;t get it? Resend OTP</Text>
+                </TouchableOpacity>
               </>
             )}
           </ClayCard>
@@ -487,3 +398,4 @@ const styles = StyleSheet.create({
 
   terms: { fontSize: 11, color: colors.clayMuted, textAlign: 'center', marginTop: spacing.lg, lineHeight: 16 },
 });
+
