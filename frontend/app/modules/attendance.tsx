@@ -798,33 +798,46 @@ const CaptureFlow = ({
       }
       // Step 2: face recognition — call the dalmart service DIRECTLY (multipart).
       const fr = await dalmartFaceValidate(qid, { base64: b64, uri });
-      const att = fr?.data?.attendance || {};
-      const st = fr?.data?.status || {};
-      const fm = fr?.data?.face_match || {};
-      const faceOk = !!fr?.success && (att.face_recognition === true || st.face_recognition === true);
+      const root = fr?.data || fr || {};
+      const att = root.attendance || {};
+      const st = root.status || {};
+      const fm = root.face_match || root.faceMatch || {};
+      const markedAt =
+        att.face_recognition_marked_at || st.face_recognition_marked_at ||
+        root.face_recognition_marked_at || null;
+      const faceFlag =
+        att.face_recognition === true || st.face_recognition === true ||
+        root.face_recognition === true;
+      // Face is accepted if dalmart flags it OR returns a marked-at timestamp.
+      const faceOk = (!!fr?.success && (faceFlag || !!markedAt)) || faceFlag || !!markedAt;
 
       if (faceOk) {
-        const markedAt = att.face_recognition_marked_at || st.face_recognition_marked_at || new Date().toISOString();
-        // Determine the dalmart attendance state. Prefer the explicit `current_state`
-        // (CHECKED_IN / CHECKED_OUT) returned by the service; fall back to legacy fields.
-        const currentState = String(
-          st.current_state || att.current_state || st.current_status || att.status ||
-          (kind === 'in' ? 'CHECKED_IN' : 'CHECKED_OUT'),
+        const ts = markedAt || new Date().toISOString();
+        // Determine the dalmart attendance state robustly. The service may return the
+        // state under several keys / casings (CHECKED_IN, "CHECKED IN", IN, etc.).
+        // Decide by substring; if it is neither clearly IN nor OUT, fall back to the
+        // action the user just initiated (`kind`).
+        const rawState = String(
+          st.current_state ?? att.current_state ?? root.current_state ??
+          st.current_status ?? att.current_status ?? att.status ?? '',
         ).toUpperCase();
-        const isCheckedIn = currentState === 'CHECKED_IN' || currentState === 'IN';
+        let isCheckedIn: boolean;
+        if (rawState.includes('OUT')) isCheckedIn = false;
+        else if (rawState.includes('IN')) isCheckedIn = true;
+        else isCheckedIn = kind === 'in';
         const recType: 'in' | 'out' = isCheckedIn ? 'in' : 'out';
         // Persist the ENTIRE face-recognition JSON locally + drive the timeline/button
         // purely from the dalmart current_state (no FastAPI).
         onSuccess({
           currentState: isCheckedIn ? 'CHECKED_IN' : 'CHECKED_OUT',
-          markedAt,
+          markedAt: ts,
           venue: venueName || undefined,
           faceResponse: fr,
         });
         const rec = {
           accepted: true,
           type: recType,
-          timestamp: markedAt,
+          timestamp: ts,
           geofence_name: venueName,
           inside_geofence: true,
           face_passed: true,
