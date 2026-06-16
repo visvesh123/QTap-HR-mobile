@@ -619,7 +619,7 @@ const SummaryCard = ({ label, value, color, icon }: any) => (
 );
 
 // ---------- CAPTURE FLOW (modal) ----------
-type CaptureStep = 'permissions' | 'camera' | 'verifying' | 'result';
+type CaptureStep = 'permissions' | 'location' | 'camera' | 'verifying' | 'result';
 type DemoOutcome = 'success' | 'low_confidence' | 'spoof';
 
 const CaptureFlow = ({
@@ -637,22 +637,46 @@ const CaptureFlow = ({
   const [selfieUri, setSelfieUri] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
   const [demoOutcome, setDemoOutcome] = useState<DemoOutcome>('success');
+  const [coords, setCoords] = useState<{ lat: number; lon: number; accuracy: number; mock: boolean } | null>(null);
   const camRef = useRef<any>(null);
+  const started = useRef(false);
 
+  // Sequence: ensure camera permission → fetch geolocation FIRST → then face verification
   useEffect(() => {
     (async () => {
-      if (Platform.OS === 'web') {
-        setStep('camera');
-        return;
+      if (started.current) return;
+      if (Platform.OS !== 'web') {
+        if (!permission) return;
+        if (!permission.granted) {
+          const r = await requestPermission();
+          if (!r.granted) { onClose(); return; }
+        }
       }
-      if (!permission) return;
-      if (!permission.granted) {
-        const r = await requestPermission();
-        if (!r.granted) { onClose(); return; }
-      }
-      setStep('camera');
+      started.current = true;
+      setStep('location');
+      fetchLocation();
     })();
   }, [permission]);
+
+  const fetchLocation = async () => {
+    let lat = MU_LAT, lon = MU_LON, accuracy = 8, mock = false;
+    if (Platform.OS !== 'web') {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+          lat = loc.coords.latitude;
+          lon = loc.coords.longitude;
+          accuracy = loc.coords.accuracy || 8;
+          // @ts-ignore
+          mock = !!loc.mocked;
+        }
+      } catch {}
+    }
+    setCoords({ lat, lon, accuracy, mock });
+    // brief pause so the "location captured" state is visible, then move to face
+    setTimeout(() => setStep('camera'), 1100);
+  };
 
   const snap = async () => {
     if (Platform.OS === 'web') {
@@ -672,36 +696,16 @@ const CaptureFlow = ({
   const verify = async (b64: string | null) => {
     setStep('verifying');
     try {
-      let lat = MU_LAT, lon = MU_LON, accuracy = 8, mock = false;
-      if (demoMode) {
-        if (demoInsideFence) {
-          lat = MU_LAT + (Math.random() - 0.5) * 0.001;
-          lon = MU_LON + (Math.random() - 0.5) * 0.001;
-        } else {
-          lat = 17.43; lon = 78.50;
-        }
-      } else if (Platform.OS !== 'web') {
-        try {
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status === 'granted') {
-            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-            lat = loc.coords.latitude;
-            lon = loc.coords.longitude;
-            accuracy = loc.coords.accuracy || 8;
-            // @ts-ignore
-            mock = !!loc.mocked;
-          }
-        } catch {}
-      }
+      const c = coords || { lat: MU_LAT, lon: MU_LON, accuracy: 8, mock: false };
       const res = await api.attendanceCheck({
-        latitude: lat,
-        longitude: lon,
-        accuracy_m: accuracy,
+        latitude: c.lat,
+        longitude: c.lon,
+        accuracy_m: c.accuracy,
         type: kind,
         attendance_type: attType,
         selfie_b64: b64 ? 'b64-' + (b64?.length || 1) : 'placeholder',
-        is_mock_location: mock,
-        demo_face_outcome: demoMode ? demoOutcome : null,
+        is_mock_location: c.mock,
+        demo_face_outcome: null,
       });
       // Cinematic delay so scan animation can play
       setTimeout(() => { setResult(res); setStep('result'); }, 2600);
@@ -723,9 +727,15 @@ const CaptureFlow = ({
         <View style={styles.modalCard}>
           <View style={styles.modalHead}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.modalKicker}>STEP {step === 'camera' ? '1 of 2' : step === 'verifying' ? '2 of 2' : step === 'result' ? '✓ Done' : '…'}</Text>
+              <Text style={styles.modalKicker}>{
+                step === 'location' ? 'STEP 1 OF 2 · LOCATION' :
+                step === 'camera' ? 'STEP 2 OF 2 · FACE' :
+                step === 'verifying' ? 'ALMOST DONE' :
+                step === 'result' ? '✓ DONE' : '…'
+              }</Text>
               <Text style={styles.modalTitle}>
-                {step === 'camera' ? `Selfie for Check-${kind}` :
+                {step === 'location' ? 'Confirm your location' :
+                 step === 'camera' ? `Face check · Check-${kind}` :
                  step === 'verifying' ? 'Verifying you…' :
                  step === 'result' ? (result?.accepted ? 'Verified ✓' : 'Verification failed') :
                  'Preparing…'}
@@ -739,9 +749,11 @@ const CaptureFlow = ({
           {step === 'permissions' && (
             <View style={styles.center}>
               <ActivityIndicator color={colors.primary} />
-              <Text style={styles.captureMsg}>Requesting camera & location…</Text>
+              <Text style={styles.captureMsg}>Preparing…</Text>
             </View>
           )}
+
+          {step === 'location' && <LocationStep coords={coords} />}
 
           {step === 'camera' && (
             <View>
@@ -814,6 +826,51 @@ const CaptureFlow = ({
         </View>
       </View>
     </Modal>
+  );
+};
+
+const LocationStep = ({ coords }: { coords: { lat: number; lon: number; accuracy: number; mock: boolean } | null }) => {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(pulse, { toValue: 1, duration: 1600, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+    ).start();
+  }, []);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.3] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] });
+  const done = !!coords;
+
+  return (
+    <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
+      <View style={styles.locPinWrap}>
+        {!done && <Animated.View style={[styles.locPulse, { transform: [{ scale }], opacity }]} />}
+        <View style={[styles.locPin, done && { backgroundColor: colors.success }]}>
+          <MaterialCommunityIcons name={done ? 'map-marker-check' : 'map-marker-radius'} size={44} color="#FFFFFF" />
+        </View>
+      </View>
+      <Text style={styles.locTitle}>{done ? 'Location captured' : 'Pinpointing your location…'}</Text>
+      <Text style={styles.locSub}>
+        {done
+          ? `Lat ${coords!.lat.toFixed(4)}, Lon ${coords!.lon.toFixed(4)} · ±${Math.round(coords!.accuracy)}m`
+          : 'Make sure GPS / location services are enabled'}
+      </Text>
+      {coords?.mock && (
+        <View style={styles.locWarn}>
+          <Ionicons name="warning" size={13} color={colors.sos} />
+          <Text style={styles.locWarnText}>Mock location detected</Text>
+        </View>
+      )}
+      <View style={styles.locNextHint}>
+        {done ? (
+          <>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.locNextText}>Starting face verification…</Text>
+          </>
+        ) : (
+          <Text style={styles.locNextText}>Step 1 of 2 · then a quick face check</Text>
+        )}
+      </View>
+    </View>
   );
 };
 
@@ -1306,6 +1363,34 @@ const styles = StyleSheet.create({
   },
   center: { alignItems: 'center', paddingVertical: spacing.xl },
   captureMsg: { color: colors.textSecondary, marginTop: 10, textAlign: 'center', fontSize: 13 },
+  // Location step
+  locPinWrap: {
+    width: 120, height: 120, alignItems: 'center', justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  locPulse: {
+    position: 'absolute',
+    width: 84, height: 84, borderRadius: 42,
+    backgroundColor: colors.primary,
+  },
+  locPin: {
+    width: 84, height: 84, borderRadius: 42,
+    backgroundColor: colors.primary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  locTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
+  locSub: { fontSize: 12.5, color: colors.textSecondary, marginTop: 6, textAlign: 'center', paddingHorizontal: spacing.lg },
+  locWarn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    marginTop: 10, paddingHorizontal: 10, paddingVertical: 5,
+    backgroundColor: '#FEE2E2', borderRadius: radii.pill,
+  },
+  locWarnText: { fontSize: 11, fontWeight: '700', color: colors.sos },
+  locNextHint: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginTop: spacing.lg,
+  },
+  locNextText: { fontSize: 12, color: colors.textMuted, fontWeight: '600' },
   captureSub: { color: colors.textMuted, marginTop: 4, fontSize: 11 },
   cameraWrap: {
     aspectRatio: 3 / 4,
