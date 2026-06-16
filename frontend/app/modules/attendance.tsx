@@ -10,7 +10,6 @@ import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { api, dalmartGeoValidate, dalmartFaceValidate } from '../../src/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../src/auth';
 import { colors, radii, shadow, spacing, clay } from '../../src/theme';
 import { Card, Pill, Badge, ScreenHeader, Empty } from '../../src/ui';
@@ -69,60 +68,32 @@ export default function StaffAttendanceScreen() {
   const [showCapture, setShowCapture] = useState(false);
   const [captureKind, setCaptureKind] = useState<'in' | 'out'>('in');
 
-  // ---- Dalmart-driven "today" (NO FastAPI). Persisted on-device only. ----
+  // ---- Dalmart-driven "today" (NO FastAPI, NO local storage). In-memory only. ----
   type DToday = {
     checkInAt?: string;
     checkOutAt?: string;
     venue?: string;
-    lastStatus?: 'IN' | 'OUT';
-    currentState?: string;        // raw dalmart state e.g. CHECKED_IN / CHECKED_OUT
-    faceMarkedAt?: string;        // last face_recognition_marked_at (UTC)
-    faceResponse?: any;           // entire dalmart face-recognition JSON response
+    faceResponse?: any;           // entire dalmart face-recognition JSON response (session-only)
   };
-  const todayStr = useMemo(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }, []);
-  const storageKey = `mu_att_${user?.qid || 'anon'}_${todayStr}`;
   const [dalmartToday, setDalmartToday] = useState<DToday | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(storageKey);
-        setDalmartToday(raw ? JSON.parse(raw) : null);
-      } catch { setDalmartToday(null); }
-    })();
-  }, [storageKey]);
-
-  // The ONLY thing that updates the timeline: a successful dalmart face recognition.
-  // Drives the button purely from the dalmart `current_state` (CHECKED_IN/CHECKED_OUT)
-  // and persists the ENTIRE face-recognition JSON response on-device.
+  // Updates the timeline in-memory after a successful dalmart face recognition.
+  // `status` comes directly from the button the user pressed (IN / OUT).
   const applyDalmartPunch = useCallback((payload: {
-    currentState: string;
+    status: 'IN' | 'OUT';
     markedAt: string;
     venue?: string;
     faceResponse: any;
   }) => {
-    const cs = String(payload.currentState || '').toUpperCase();
-    const isCheckedIn = cs === 'CHECKED_IN';
     setDalmartToday((prev) => {
       const next: DToday = { ...(prev || {}) };
-      if (isCheckedIn) {
-        next.checkInAt = payload.markedAt;
-        next.lastStatus = 'IN';
-      } else {
-        next.checkOutAt = payload.markedAt;
-        next.lastStatus = 'OUT';
-      }
-      next.currentState = cs;
-      next.faceMarkedAt = payload.markedAt;
-      next.faceResponse = payload.faceResponse;   // entire dalmart JSON stored locally
+      if (payload.status === 'IN') next.checkInAt = payload.markedAt;
+      else next.checkOutAt = payload.markedAt;
+      next.faceResponse = payload.faceResponse;
       if (payload.venue) next.venue = payload.venue;
-      AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch(() => {});
       return next;
     });
-  }, [storageKey]);
+  }, []);
 
   // History / Stats / Geofences only (Today timeline & button are dalmart-driven, no FastAPI).
   const reload = useCallback(async () => {
@@ -141,13 +112,6 @@ export default function StaffAttendanceScreen() {
   }, [isAdmin]);
 
   useEffect(() => { reload(); }, [reload]);
-
-  const checkedIn = dalmartToday?.lastStatus === 'IN';
-  const checkedOut = dalmartToday?.lastStatus === 'OUT';
-  const lastEventToday: 'in' | 'out' | null =
-    dalmartToday?.lastStatus === 'IN' ? 'in' : dalmartToday?.lastStatus === 'OUT' ? 'out' : null;
-  const nextAction: 'in' | 'out' = lastEventToday === 'in' ? 'out' : 'in';
-  const punchCount = (dalmartToday?.checkInAt || dalmartToday?.checkOutAt) ? 1 : 0;
 
   const onCheckPress = (kind: 'in' | 'out') => {
     setCaptureKind(kind);
@@ -194,18 +158,8 @@ export default function StaffAttendanceScreen() {
             checkOutAt={dalmartToday?.checkOutAt}
             attType={attType}
             setAttType={setAttType}
-            demoMode={demoMode}
-            setDemoMode={setDemoMode}
-            demoInsideFence={demoInsideFence}
-            setDemoInsideFence={setDemoInsideFence}
             geofences={geofences}
             designatedLocations={user?.designated_locations || []}
-            checkedIn={checkedIn}
-            checkedOut={checkedOut}
-            nextAction={nextAction}
-            lastEventToday={lastEventToday}
-            punchCount={punchCount}
-            history={history}
             onCheck={onCheckPress}
           />
         )}
@@ -232,57 +186,55 @@ export default function StaffAttendanceScreen() {
 
 // ---------- TODAY ----------
 const TodayTab = ({
-  checkInAt, checkOutAt, attType, setAttType, demoMode, setDemoMode,
-  demoInsideFence, setDemoInsideFence, geofences, designatedLocations,
-  checkedIn, checkedOut, nextAction, lastEventToday, punchCount, history, onCheck,
+  checkInAt, checkOutAt, attType, setAttType, geofences, designatedLocations, onCheck,
 }: any) => {
   return (
     <View>
-      {/* Check In / Out — top */}
+      {/* Check In */}
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => onCheck(nextAction)}
-        testID={`action-${nextAction}`}
+        onPress={() => onCheck('in')}
+        testID="action-in"
         style={[styles.toggleWrap, clay.crimson as any, { marginTop: 0 }]}
       >
         <LinearGradient
-          colors={
-            nextAction === 'in'
-              ? ['#22C55E', '#16A34A', '#15803D']
-              : [colors.primaryLight, colors.primary, colors.primaryDark]
-          }
+          colors={['#22C55E', '#16A34A', '#15803D']}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={styles.toggleBtn}
         >
           <View style={[styles.toggleIconWrap, clay.surfaceSoft as any]}>
-            <MaterialCommunityIcons
-              name={nextAction === 'in' ? 'login-variant' : 'logout-variant'}
-              size={30}
-              color={colors.white}
-            />
+            <MaterialCommunityIcons name="login-variant" size={30} color={colors.white} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.toggleTitle}>
-              {nextAction === 'in' ? 'Check In' : 'Check Out'}
-            </Text>
-            <Text style={styles.toggleSub}>
-              {nextAction === 'in'
-                ? (punchCount === 0 ? 'Start your day' : 'Re-punch · Welcome back')
-                : 'End shift / break'}
-            </Text>
+            <Text style={styles.toggleTitle}>Check In</Text>
+            <Text style={styles.toggleSub}>Mark your arrival</Text>
           </View>
           <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.85)" />
         </LinearGradient>
       </TouchableOpacity>
 
-      {checkedIn && (
-        <View style={styles.multiPunchHint}>
-          <MaterialCommunityIcons name="refresh" size={14} color={colors.clayMuted} />
-          <Text style={styles.multiPunchText}>
-            Multi-punch enabled · Check-In / Check-Out any number of times today.
-          </Text>
-        </View>
-      )}
+      {/* Check Out — directly under Check In */}
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => onCheck('out')}
+        testID="action-out"
+        style={[styles.toggleWrap, clay.crimson as any, { marginTop: spacing.sm }]}
+      >
+        <LinearGradient
+          colors={[colors.primaryLight, colors.primary, colors.primaryDark]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={styles.toggleBtn}
+        >
+          <View style={[styles.toggleIconWrap, clay.surfaceSoft as any]}>
+            <MaterialCommunityIcons name="logout-variant" size={30} color={colors.white} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.toggleTitle}>Check Out</Text>
+            <Text style={styles.toggleSub}>Mark your departure</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.85)" />
+        </LinearGradient>
+      </TouchableOpacity>
 
       {/* Today's Timeline */}
       <View style={[styles.clayBlock]}>
@@ -692,7 +644,7 @@ const CaptureFlow = ({
   qid?: string;
   demoMode: boolean;
   demoInsideFence: boolean;
-  onSuccess: (payload: { currentState: string; markedAt: string; venue?: string; faceResponse: any }) => void;
+  onSuccess: (payload: { status: 'IN' | 'OUT'; markedAt: string; venue?: string; faceResponse: any }) => void;
   onDone: () => void;
   onClose: () => void;
 }) => {
@@ -813,23 +765,13 @@ const CaptureFlow = ({
 
       if (faceOk) {
         const ts = markedAt || new Date().toISOString();
-        // Determine the dalmart attendance state robustly. The service may return the
-        // state under several keys / casings (CHECKED_IN, "CHECKED IN", IN, etc.).
-        // Decide by substring; if it is neither clearly IN nor OUT, fall back to the
-        // action the user just initiated (`kind`).
-        const rawState = String(
-          st.current_state ?? att.current_state ?? root.current_state ??
-          st.current_status ?? att.current_status ?? att.status ?? '',
-        ).toUpperCase();
-        let isCheckedIn: boolean;
-        if (rawState.includes('OUT')) isCheckedIn = false;
-        else if (rawState.includes('IN')) isCheckedIn = true;
-        else isCheckedIn = kind === 'in';
-        const recType: 'in' | 'out' = isCheckedIn ? 'in' : 'out';
-        // Persist the ENTIRE face-recognition JSON locally + drive the timeline/button
-        // purely from the dalmart current_state (no FastAPI).
+        // Status is driven by the button the user pressed:
+        // Check In -> IN, Check Out -> OUT.
+        const status: 'IN' | 'OUT' = kind === 'in' ? 'IN' : 'OUT';
+        const recType: 'in' | 'out' = kind;
+        // Update the timeline in-memory from the dalmart result (no FastAPI, no storage).
         onSuccess({
-          currentState: isCheckedIn ? 'CHECKED_IN' : 'CHECKED_OUT',
+          status,
           markedAt: ts,
           venue: venueName || undefined,
           faceResponse: fr,
