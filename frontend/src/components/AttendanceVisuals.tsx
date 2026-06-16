@@ -110,17 +110,35 @@ export function WeekStreak({ days }: { days: StreakDay[] }) {
 export function TodayTimeline({
   checkIn, checkOut, workSeconds, expectedStart = '09:30',
 }: { checkIn?: string; checkOut?: string; workSeconds?: number; expectedStart?: string }) {
+  // The dalmart `face_recognition_marked_at` is a UTC timestamp. Always render it in
+  // IST (Asia/Kolkata) so the timeline matches the campus clock on every device/web.
+  const normalize = (iso?: string) => {
+    if (!iso) return null;
+    let s = String(iso).trim().replace(' ', 'T');
+    // Naive timestamps (no Z / no ±hh:mm offset) are treated as UTC.
+    if (!/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  };
   const fmt = (iso?: string) => {
-    if (!iso) return '—';
-    try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-    catch { return '—'; }
+    const d = normalize(iso);
+    if (!d) return '—';
+    try {
+      return d.toLocaleTimeString('en-IN', {
+        hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata',
+      });
+    } catch { return '—'; }
   };
   const workH = workSeconds ? (workSeconds / 3600).toFixed(1) : '0.0';
-  // Position along the day from 06:00 to 22:00 (16h span)
+  // Position along the day from 06:00 to 22:00 (16h span), using IST hour-of-day.
   const toPct = (iso?: string) => {
-    if (!iso) return null;
-    const d = new Date(iso);
-    const h = d.getHours() + d.getMinutes() / 60;
+    const d = normalize(iso);
+    if (!d) return null;
+    const hhmm = d.toLocaleTimeString('en-GB', {
+      hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata',
+    });
+    const [hh, mm] = hhmm.split(':').map(Number);
+    const h = hh + mm / 60;
     const pct = Math.max(0, Math.min(1, (h - 6) / 16));
     return pct * 100;
   };
@@ -130,7 +148,7 @@ export function TodayTimeline({
   return (
     <View style={s.timeline}>
       <View style={s.tlHead}>
-        <Text style={s.tlTitle}>Today's Timeline</Text>
+        <Text style={s.tlTitle}>Today&apos;s Timeline</Text>
         <Text style={s.tlSub}>Expected start {expectedStart} · {workH}h worked</Text>
       </View>
       <View style={s.tlTrack}>

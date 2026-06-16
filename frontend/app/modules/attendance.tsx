@@ -35,6 +35,25 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
 const MU_LAT = 17.5234;
 const MU_LON = 78.3941;
 
+// dalmart face_recognition_marked_at is UTC — always render in IST (Asia/Kolkata).
+function normalizeUtc(iso?: string): Date | null {
+  if (!iso) return null;
+  let s = String(iso).trim().replace(' ', 'T');
+  if (!/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+function fmtISTTime(iso?: string) {
+  const d = normalizeUtc(iso);
+  if (!d) return '—';
+  return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
+}
+function fmtISTDate(iso?: string) {
+  const d = normalizeUtc(iso);
+  if (!d) return '';
+  return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+}
+
 export default function StaffAttendanceScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -51,7 +70,15 @@ export default function StaffAttendanceScreen() {
   const [captureKind, setCaptureKind] = useState<'in' | 'out'>('in');
 
   // ---- Dalmart-driven "today" (NO FastAPI). Persisted on-device only. ----
-  type DToday = { checkInAt?: string; checkOutAt?: string; venue?: string; lastStatus?: 'IN' | 'OUT' };
+  type DToday = {
+    checkInAt?: string;
+    checkOutAt?: string;
+    venue?: string;
+    lastStatus?: 'IN' | 'OUT';
+    currentState?: string;        // raw dalmart state e.g. CHECKED_IN / CHECKED_OUT
+    faceMarkedAt?: string;        // last face_recognition_marked_at (UTC)
+    faceResponse?: any;           // entire dalmart face-recognition JSON response
+  };
   const todayStr = useMemo(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -69,13 +96,29 @@ export default function StaffAttendanceScreen() {
   }, [storageKey]);
 
   // The ONLY thing that updates the timeline: a successful dalmart face recognition.
-  const applyDalmartPunch = useCallback((status: 'IN' | 'OUT', markedAt: string, venue?: string) => {
+  // Drives the button purely from the dalmart `current_state` (CHECKED_IN/CHECKED_OUT)
+  // and persists the ENTIRE face-recognition JSON response on-device.
+  const applyDalmartPunch = useCallback((payload: {
+    currentState: string;
+    markedAt: string;
+    venue?: string;
+    faceResponse: any;
+  }) => {
+    const cs = String(payload.currentState || '').toUpperCase();
+    const isCheckedIn = cs === 'CHECKED_IN';
     setDalmartToday((prev) => {
       const next: DToday = { ...(prev || {}) };
-      if (status === 'IN') next.checkInAt = markedAt;
-      else next.checkOutAt = markedAt;
-      next.lastStatus = status;
-      if (venue) next.venue = venue;
+      if (isCheckedIn) {
+        next.checkInAt = payload.markedAt;
+        next.lastStatus = 'IN';
+      } else {
+        next.checkOutAt = payload.markedAt;
+        next.lastStatus = 'OUT';
+      }
+      next.currentState = cs;
+      next.faceMarkedAt = payload.markedAt;
+      next.faceResponse = payload.faceResponse;   // entire dalmart JSON stored locally
+      if (payload.venue) next.venue = payload.venue;
       AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch(() => {});
       return next;
     });
@@ -649,7 +692,7 @@ const CaptureFlow = ({
   qid?: string;
   demoMode: boolean;
   demoInsideFence: boolean;
-  onSuccess: (status: 'IN' | 'OUT', markedAt: string, venue?: string) => void;
+  onSuccess: (payload: { currentState: string; markedAt: string; venue?: string; faceResponse: any }) => void;
   onDone: () => void;
   onClose: () => void;
 }) => {
@@ -762,10 +805,22 @@ const CaptureFlow = ({
 
       if (faceOk) {
         const markedAt = att.face_recognition_marked_at || st.face_recognition_marked_at || new Date().toISOString();
-        const curStatus = String(st.current_status || att.status || (kind === 'in' ? 'IN' : 'OUT')).toUpperCase();
-        const recType: 'in' | 'out' = curStatus === 'OUT' ? 'out' : curStatus === 'IN' ? 'in' : kind;
-        // Drive the timeline & button directly from the dalmart result (no FastAPI).
-        onSuccess(recType === 'out' ? 'OUT' : 'IN', markedAt, venueName || undefined);
+        // Determine the dalmart attendance state. Prefer the explicit `current_state`
+        // (CHECKED_IN / CHECKED_OUT) returned by the service; fall back to legacy fields.
+        const currentState = String(
+          st.current_state || att.current_state || st.current_status || att.status ||
+          (kind === 'in' ? 'CHECKED_IN' : 'CHECKED_OUT'),
+        ).toUpperCase();
+        const isCheckedIn = currentState === 'CHECKED_IN' || currentState === 'IN';
+        const recType: 'in' | 'out' = isCheckedIn ? 'in' : 'out';
+        // Persist the ENTIRE face-recognition JSON locally + drive the timeline/button
+        // purely from the dalmart current_state (no FastAPI).
+        onSuccess({
+          currentState: isCheckedIn ? 'CHECKED_IN' : 'CHECKED_OUT',
+          markedAt,
+          venue: venueName || undefined,
+          faceResponse: fr,
+        });
         const rec = {
           accepted: true,
           type: recType,
@@ -1169,9 +1224,9 @@ const ResultView = ({ result, kind, selfieUri, onDone, onRetry }: {
         )}
         {ok && (
           <Text style={styles.resultTime}>
-            {new Date(result.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {fmtISTTime(result.timestamp)}
             {' · '}
-            {new Date(result.timestamp).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
+            {fmtISTDate(result.timestamp)}
           </Text>
         )}
       </Animated.View>
