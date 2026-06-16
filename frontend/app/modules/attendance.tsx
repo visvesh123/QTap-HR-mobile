@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { api, dalmartGeoValidate, dalmartFaceValidate } from '../../src/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../src/auth';
 import { colors, radii, shadow, spacing, clay } from '../../src/theme';
 import { Card, Pill, Badge, ScreenHeader, Empty } from '../../src/ui';
@@ -39,7 +40,6 @@ export default function StaffAttendanceScreen() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [tab, setTab] = useState<'today' | 'history' | 'stats' | 'team'>('today');
-  const [today, setToday] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [team, setTeam] = useState<any>(null);
@@ -50,15 +50,46 @@ export default function StaffAttendanceScreen() {
   const [showCapture, setShowCapture] = useState(false);
   const [captureKind, setCaptureKind] = useState<'in' | 'out'>('in');
 
+  // ---- Dalmart-driven "today" (NO FastAPI). Persisted on-device only. ----
+  type DToday = { checkInAt?: string; checkOutAt?: string; venue?: string; lastStatus?: 'IN' | 'OUT' };
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+  const storageKey = `mu_att_${user?.qid || 'anon'}_${todayStr}`;
+  const [dalmartToday, setDalmartToday] = useState<DToday | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(storageKey);
+        setDalmartToday(raw ? JSON.parse(raw) : null);
+      } catch { setDalmartToday(null); }
+    })();
+  }, [storageKey]);
+
+  // The ONLY thing that updates the timeline: a successful dalmart face recognition.
+  const applyDalmartPunch = useCallback((status: 'IN' | 'OUT', markedAt: string, venue?: string) => {
+    setDalmartToday((prev) => {
+      const next: DToday = { ...(prev || {}) };
+      if (status === 'IN') next.checkInAt = markedAt;
+      else next.checkOutAt = markedAt;
+      next.lastStatus = status;
+      if (venue) next.venue = venue;
+      AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, [storageKey]);
+
+  // History / Stats / Geofences only (Today timeline & button are dalmart-driven, no FastAPI).
   const reload = useCallback(async () => {
     try {
-      const [t, h, s, g] = await Promise.all([
-        api.attendanceToday().catch(() => null),
+      const [h, s, g] = await Promise.all([
         api.attendanceHistory().catch(() => []),
         api.attendanceStats().catch(() => null),
         api.attendanceGeofences().catch(() => []),
       ]);
-      setToday(t); setHistory(h); setStats(s); setGeofences(g);
+      setHistory(h); setStats(s); setGeofences(g);
       if (isAdmin) {
         const tm = await api.attendanceAdminToday().catch(() => null);
         setTeam(tm);
@@ -68,33 +99,12 @@ export default function StaffAttendanceScreen() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  const checkedIn = !!today?.check_in;
-  const checkedOut = !!today?.check_out;
-
-  // Determine the LAST event today (multi-punch friendly).
-  // We look through history for events on today's date (local) and take
-  // the most recent accepted event. If "in" was last → next action is OUT.
-  // If "out" was last (or nothing today) → next action is IN.
-  const lastEventToday: 'in' | 'out' | null = useMemo(() => {
-    const todayLocal = new Date();
-    const y = todayLocal.getFullYear();
-    const m = String(todayLocal.getMonth() + 1).padStart(2, '0');
-    const d = String(todayLocal.getDate()).padStart(2, '0');
-    const todayStr = `${y}-${m}-${d}`;
-    const todayEvents = history
-      .filter((h: any) => h?.accepted && (h?.timestamp || '').slice(0, 10) === todayStr)
-      .sort((a: any, b: any) => (a.timestamp < b.timestamp ? 1 : -1));
-    const last = todayEvents[0];
-    if (!last) return null;
-    return last.type === 'in' ? 'in' : 'out';
-  }, [history]);
-
+  const checkedIn = dalmartToday?.lastStatus === 'IN';
+  const checkedOut = dalmartToday?.lastStatus === 'OUT';
+  const lastEventToday: 'in' | 'out' | null =
+    dalmartToday?.lastStatus === 'IN' ? 'in' : dalmartToday?.lastStatus === 'OUT' ? 'out' : null;
   const nextAction: 'in' | 'out' = lastEventToday === 'in' ? 'out' : 'in';
-  const punchCount = useMemo(() => {
-    const todayLocal = new Date();
-    const todayStr = todayLocal.toISOString().slice(0, 10);
-    return history.filter((h: any) => h?.accepted && (h?.timestamp || '').slice(0, 10) === todayStr).length;
-  }, [history]);
+  const punchCount = (dalmartToday?.checkInAt || dalmartToday?.checkOutAt) ? 1 : 0;
 
   const onCheckPress = (kind: 'in' | 'out') => {
     setCaptureKind(kind);
@@ -137,7 +147,8 @@ export default function StaffAttendanceScreen() {
       <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xxl }}>
         {tab === 'today' && (
           <TodayTab
-            today={today}
+            checkInAt={dalmartToday?.checkInAt}
+            checkOutAt={dalmartToday?.checkOutAt}
             attType={attType}
             setAttType={setAttType}
             demoMode={demoMode}
@@ -167,10 +178,8 @@ export default function StaffAttendanceScreen() {
           qid={user?.qid}
           demoMode={demoMode}
           demoInsideFence={demoInsideFence}
-          onDone={async () => {
-            setShowCapture(false);
-            await reload();
-          }}
+          onSuccess={applyDalmartPunch}
+          onDone={() => { setShowCapture(false); reload(); }}
           onClose={() => setShowCapture(false)}
         />
       )}
@@ -180,7 +189,7 @@ export default function StaffAttendanceScreen() {
 
 // ---------- TODAY ----------
 const TodayTab = ({
-  today, attType, setAttType, demoMode, setDemoMode,
+  checkInAt, checkOutAt, attType, setAttType, demoMode, setDemoMode,
   demoInsideFence, setDemoInsideFence, geofences, designatedLocations,
   checkedIn, checkedOut, nextAction, lastEventToday, punchCount, history, onCheck,
 }: any) => {
@@ -236,9 +245,9 @@ const TodayTab = ({
       <View style={[styles.clayBlock]}>
         <Text style={styles.cardLabel}>TODAY&apos;S TIMELINE</Text>
         <TodayTimeline
-          checkIn={today?.check_in?.timestamp}
-          checkOut={today?.check_out?.timestamp}
-          workSeconds={today?.work_seconds}
+          checkIn={checkInAt}
+          checkOut={checkOutAt}
+          workSeconds={(checkInAt && checkOutAt) ? Math.max(0, (new Date(checkOutAt).getTime() - new Date(checkInAt).getTime()) / 1000) : undefined}
         />
       </View>
 
@@ -633,13 +642,14 @@ type CaptureStep = 'permissions' | 'location' | 'camera' | 'verifying' | 'result
 type DemoOutcome = 'success' | 'low_confidence' | 'spoof';
 
 const CaptureFlow = ({
-  kind, attType, qid, demoMode, demoInsideFence, onDone, onClose,
+  kind, attType, qid, demoMode, demoInsideFence, onSuccess, onDone, onClose,
 }: {
   kind: 'in' | 'out';
   attType: AttType;
   qid?: string;
   demoMode: boolean;
   demoInsideFence: boolean;
+  onSuccess: (status: 'IN' | 'OUT', markedAt: string, venue?: string) => void;
   onDone: () => void;
   onClose: () => void;
 }) => {
@@ -753,17 +763,20 @@ const CaptureFlow = ({
       if (faceOk) {
         const markedAt = att.face_recognition_marked_at || st.face_recognition_marked_at || new Date().toISOString();
         const curStatus = String(st.current_status || att.status || (kind === 'in' ? 'IN' : 'OUT')).toUpperCase();
-        const recType = curStatus === 'OUT' ? 'out' : curStatus === 'IN' ? 'in' : kind;
-        // Persist the verified punch with the exact face-recognition time → drives timeline & button.
-        const rec = await api.attendanceRecordDalmart({
+        const recType: 'in' | 'out' = curStatus === 'OUT' ? 'out' : curStatus === 'IN' ? 'in' : kind;
+        // Drive the timeline & button directly from the dalmart result (no FastAPI).
+        onSuccess(recType === 'out' ? 'OUT' : 'IN', markedAt, venueName || undefined);
+        const rec = {
+          accepted: true,
           type: recType,
-          marked_at: markedAt,
-          venue_id: att.venue_id ?? null,
-          venue_name: venueName,
-          confidence: fm.confidence ?? null,
-          attendance_id: att.attendance_id ?? null,
-          attendance_type: attType,
-        });
+          timestamp: markedAt,
+          geofence_name: venueName,
+          inside_geofence: true,
+          face_passed: true,
+          face_score: typeof fm.confidence === 'number' ? fm.confidence / 100 : null,
+          spoof_detected: false,
+          is_mock_location: false,
+        };
         setTimeout(() => { setResult(rec); setStep('result'); }, 1500);
       } else {
         setResult({ accepted: false, rejection_reason: 'face_mismatch', message: fr?.message || 'Face not recognized. Please try again.' });
