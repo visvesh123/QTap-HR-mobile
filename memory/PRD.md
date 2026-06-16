@@ -39,3 +39,13 @@ See `/app/memory/test_credentials.md`.
 ## Changelog
 - 2026-06-16: Attendance History redesigned from "weekly streak" to an **Apple-style month calendar** (`/app/frontend/app/modules/attendance.tsx`). Month grid with today highlighted in filled crimson circle, colored status dots per day (Present/Late/WFH/Absent), tappable days with selection ring, prev/next month nav, and a selected-day detail card. Also fixed a render crash from an undefined `WeekStreak` reference.
 - Pending: Sora font not applying on web (P0); Leave module native date picker + Admin approval flow (P1).
+
+## Changelog (cont.)
+- 2026-06-16: **External MU profile integration on OTP login.** After OTP verify, backend calls `https://api-dot-dalmart.el.r.appspot.com/api/v2/profile?phone_number=<phone>` (server-side, httpx, 8s timeout) and:
+  - Maps `type` Staff/Student → app role staff/student.
+  - Upserts the user in Mongo (keyed by phone; derives email from QID when mail_id is null; new unique sparse `qid` index).
+  - BLOCKS login (404/502/504) if the API fails or returns no profile — no silent fallback.
+  - Returns enriched user: name, qid, gender, type, phone, designated_locations.
+  - Frontend: name flows to all screens via `user.name`; Profile screen shows PROFILE DETAILS card (QID/Type/Gender/Phone); Mark Attendance AUTHORIZED LOCATIONS uses `designated_locations` (falls back to geofences when empty).
+  - Files: backend/server.py (otp_verify, _sync_external_profile, _user_public, UserOut), src/auth.tsx (User type), app/(tabs)/profile.tsx, app/modules/attendance.tsx.
+  - Tests: backend/tests/test_external_profile_sync.py (5 pass). Note: DEMO_PHONES backfill is now dead code.
