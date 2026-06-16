@@ -8,6 +8,7 @@ import uuid
 import logging
 import bcrypt
 import jwt
+import httpx
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
@@ -469,6 +470,47 @@ async def demo_accounts():
         {"role": "staff", "email": "exam@mahindrauniversity.edu.in", "password": "exam123", "name": "Dr. Kavita Joshi (Exam Cell)"},
         {"role": "admin", "email": "admin@mahindrauniversity.edu.in", "password": "admin123", "name": "Prof. Suresh Mehta"},
     ]
+
+# ---------- WEATHER (Open-Meteo, no API key) ----------
+HYD_LAT, HYD_LON = 17.385, 78.4867
+WMO_CONDITIONS = {
+    0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+    45: "Foggy", 48: "Rime fog", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
+    56: "Freezing drizzle", 57: "Freezing drizzle", 61: "Light rain", 63: "Rain", 65: "Heavy rain",
+    66: "Freezing rain", 67: "Freezing rain", 71: "Light snow", 73: "Snow", 75: "Heavy snow",
+    77: "Snow grains", 80: "Rain showers", 81: "Rain showers", 82: "Heavy showers",
+    85: "Snow showers", 86: "Snow showers", 95: "Thunderstorm", 96: "Thunderstorm", 99: "Thunderstorm",
+}
+
+@api.get("/weather")
+async def weather():
+    """Current temperature + today's high for the campus city (Hyderabad), via Open-Meteo."""
+    try:
+        async with httpx.AsyncClient(timeout=6) as client:
+            r = await client.get("https://api.open-meteo.com/v1/forecast", params={
+                "latitude": HYD_LAT, "longitude": HYD_LON,
+                "current": "temperature_2m,weather_code",
+                "daily": "temperature_2m_max",
+                "timezone": "auto",
+            })
+            r.raise_for_status()
+            d = r.json()
+        cur = d.get("current", {}) or {}
+        daily = d.get("daily", {}) or {}
+        temp = cur.get("temperature_2m")
+        code = cur.get("weather_code")
+        highs = daily.get("temperature_2m_max") or []
+        high = highs[0] if highs else None
+        return {
+            "city": "Hyderabad",
+            "temp_c": round(temp) if temp is not None else None,
+            "high_c": round(high) if high is not None else None,
+            "code": int(code) if code is not None else None,
+            "condition": WMO_CONDITIONS.get(int(code), "—") if code is not None else None,
+        }
+    except Exception as e:
+        logging.warning(f"weather fetch failed: {e}")
+        return {"city": "Hyderabad", "temp_c": None, "high_c": None, "code": None, "condition": None, "unavailable": True}
 
 # ---------- EXAMINATIONS ----------
 @api.get("/exams/hall-ticket")

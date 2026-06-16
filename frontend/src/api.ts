@@ -115,4 +115,7 @@ export const api = {
 
   // mess
   messList: (demo?: string) => request<any>('GET', `/mess/list${demo ? `?demo=${demo}` : ''}`),
+
+  // weather
+  weather: () => request<{ city: string; temp_c: number | null; high_c: number | null; code: number | null; condition: string | null; unavailable?: boolean }>('GET', '/weather'),
 };
