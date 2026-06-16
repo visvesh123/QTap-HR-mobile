@@ -120,6 +120,7 @@ export default function StaffAttendanceScreen() {
 
       <ScrollView
         horizontal showsHorizontalScrollIndicator={false}
+        style={styles.tabScroll}
         contentContainerStyle={styles.tabRow}
       >
         {tabs.map((t: any) => (
@@ -1065,6 +1066,7 @@ function labelReason(r?: string) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.clayBg },
+  tabScroll: { flexGrow: 0, flexShrink: 0 },
   tabRow: {
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: 6,
     alignItems: 'center',

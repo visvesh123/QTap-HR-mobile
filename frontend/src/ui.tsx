@@ -182,9 +182,12 @@ const styles = StyleSheet.create({
   },
   pill: {
     paddingHorizontal: spacing.md,
-    paddingVertical: 8,
+    height: 38,
     borderRadius: radii.pill,
     marginRight: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
   },
   pillActive: {
     backgroundColor: colors.primaryBg,
