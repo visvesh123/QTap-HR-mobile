@@ -13,6 +13,24 @@ export async function clearToken() {
   await AsyncStorage.removeItem(TOKEN_KEY);
 }
 
+const DALMART_BASE = 'https://api-dot-dalmart.el.r.appspot.com';
+
+/** Direct call to the dalmart MU attendance service (bypasses our FastAPI). */
+export async function dalmartGeoValidate(
+  qid: string,
+  lat: number,
+  long: number,
+  status: 'IN' | 'OUT',
+): Promise<any> {
+  const res = await fetch(`${DALMART_BASE}/api/v2/attendance/validate/location`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', accept: '*/*' },
+    body: JSON.stringify({ qid, lat, long, status }),
+  });
+  const txt = await res.text();
+  try { return txt ? JSON.parse(txt) : null; } catch { return null; }
+}
+
 async function request<T = any>(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,

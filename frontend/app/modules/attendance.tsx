@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { api } from '../../src/api';
+import { api, dalmartGeoValidate } from '../../src/api';
 import { useAuth } from '../../src/auth';
 import { colors, radii, shadow, spacing, clay } from '../../src/theme';
 import { Card, Pill, Badge, ScreenHeader, Empty } from '../../src/ui';
@@ -164,6 +164,7 @@ export default function StaffAttendanceScreen() {
         <CaptureFlow
           kind={captureKind}
           attType={attType}
+          qid={user?.qid}
           demoMode={demoMode}
           demoInsideFence={demoInsideFence}
           onDone={async () => {
@@ -632,10 +633,11 @@ type CaptureStep = 'permissions' | 'location' | 'camera' | 'verifying' | 'result
 type DemoOutcome = 'success' | 'low_confidence' | 'spoof';
 
 const CaptureFlow = ({
-  kind, attType, demoMode, demoInsideFence, onDone, onClose,
+  kind, attType, qid, demoMode, demoInsideFence, onDone, onClose,
 }: {
   kind: 'in' | 'out';
   attType: AttType;
+  qid?: string;
   demoMode: boolean;
   demoInsideFence: boolean;
   onDone: () => void;
@@ -689,16 +691,25 @@ const CaptureFlow = ({
     }
     setCoords({ lat, lon, accuracy, mock });
 
-    // Step 1: validate geolocation with the MU attendance service. Block face on failure.
+    // Step 1: validate geolocation by calling the dalmart MU service DIRECTLY.
+    // Only open the face/camera screen when geo_validation === true.
     setGeoState('validating');
+    if (!qid) {
+      setGeoError('Your account is not enabled for geo attendance (no QID).');
+      setGeoState('invalid');
+      return;
+    }
     try {
-      const res = await api.geoValidate(lat, lon, kind === 'in' ? 'IN' : 'OUT');
-      if (res?.success) {
-        setVenueName(res.venue_name || null);
+      const json = await dalmartGeoValidate(qid, lat, lon, kind === 'in' ? 'IN' : 'OUT');
+      const inner = json?.data || {};
+      const geoOk =
+        inner?.attendance?.geo_validation === true || inner?.status?.geo_validation === true;
+      if (json?.success && geoOk) {
+        setVenueName(inner?.venue?.venue_name || null);
         setGeoState('valid');
         setTimeout(() => setStep('camera'), 1100);
       } else {
-        setGeoError(res?.message || 'You are not within an authorized location.');
+        setGeoError(json?.message || 'You are not within an authorized location.');
         setGeoState('invalid');
       }
     } catch (e: any) {
