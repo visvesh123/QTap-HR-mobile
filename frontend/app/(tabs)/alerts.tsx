@@ -20,10 +20,31 @@ const TYPE_META: Record<string, { color: string; icon: any; lib: 'ion' | 'mci' }
   urgent: { color: colors.sos, icon: 'alert-circle', lib: 'ion' },
 };
 
+function timeAgo(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso).getTime();
+  if (isNaN(d)) return '';
+  const sec = Math.floor((Date.now() - d) / 1000);
+  if (sec < 45) return 'Just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day === 1) return 'Yesterday';
+  if (day < 7) return `${day} days ago`;
+  if (day < 14) return 'Last week';
+  if (day < 30) return `${Math.floor(day / 7)} weeks ago`;
+  if (day < 60) return 'Last month';
+  if (day < 365) return `${Math.floor(day / 30)} months ago`;
+  return day < 730 ? 'Last year' : `${Math.floor(day / 365)} years ago`;
+}
+
 const FEATURED = {
   id: 'featured-vc-dinner',
   type: 'event',
   title: 'VC Dinner — 10th June 2026',
+  date: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
   image: 'https://customer-assets.emergentagent.com/job_6e34b5bc-d1ea-497f-9b38-6e61f8c9d982/artifacts/fkyl434x_DINNER%20INVITATION.jpeg',
   imageRatio: 3458 / 4292,
   location: 'Huts & Hive, Kompally',
@@ -68,7 +89,8 @@ function AccordionItem({ item, expanded, onToggle }: { item: Item; expanded: boo
           <Text style={styles.headTitle} numberOfLines={expanded ? undefined : 1}>{item.title}</Text>
           {!expanded && (
             <Text style={styles.headSnippet} numberOfLines={1}>
-              {item.location || item.body.replace(/\s+/g, ' ').trim()}
+              {[timeAgo(item.date), item.location || item.body.replace(/\s+/g, ' ').trim()]
+                .filter(Boolean).join('  ·  ')}
             </Text>
           )}
         </View>
@@ -86,13 +108,18 @@ function AccordionItem({ item, expanded, onToggle }: { item: Item; expanded: boo
           )}
           <View style={styles.metaRow}>
             <Badge label={item.type.toUpperCase()} color={meta.color} />
+            {!!item.date && (
+              <View style={styles.locRow}>
+                <Ionicons name="time-outline" size={13} color={colors.textMuted} />
+                <Text style={styles.metaText}>Posted {timeAgo(item.date)}</Text>
+              </View>
+            )}
             {!!item.location && (
               <View style={styles.locRow}>
                 <Ionicons name="location-outline" size={13} color={colors.textMuted} />
                 <Text style={styles.metaText}>{item.location}</Text>
               </View>
             )}
-            {!!item.date && <Text style={styles.metaText}>{new Date(item.date).toLocaleDateString()}</Text>}
           </View>
           <Text style={styles.bodyText}>{item.body}</Text>
         </View>
