@@ -39,7 +39,7 @@ export default function Profile() {
     { icon: 'document-text-outline', label: 'Documents & Certificates', onPress: () => router.push('/modules/certificates') },
     { icon: 'lock-closed-outline', label: 'Security & Privacy', onPress: () => {} },
     { icon: 'help-circle-outline', label: 'Help & Support', onPress: () => {} },
-    { icon: 'information-circle-outline', label: 'About Campus Hub', onPress: () => {} },
+    { icon: 'information-circle-outline', label: 'About MUOne', onPress: () => {} },
   ];
 
   return (
@@ -106,7 +106,7 @@ export default function Profile() {
               <Ionicons name="log-out-outline" size={28} color={colors.sos} />
             </View>
             <Text style={styles.modalTitle}>Sign out?</Text>
-            <Text style={styles.modalSub}>You'll need to sign in again to access Campus Hub.</Text>
+            <Text style={styles.modalSub}>You'll need to sign in again to access MUOne.</Text>
             <View style={styles.modalBtnRow}>
               <TouchableOpacity
                 onPress={() => setConfirmOpen(false)}

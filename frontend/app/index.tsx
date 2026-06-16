@@ -24,7 +24,10 @@ export default function Index() {
         <Image source={{ uri: BRAND.logoUrl }} style={styles.muLogo} resizeMode="contain" />
       </View>
       <Text style={styles.brand}>{BRAND.name.toUpperCase()}</Text>
-      <Text style={styles.title}>Campus Hub</Text>
+      <View style={styles.wmRow}>
+        <Text style={styles.wmMU}>MU</Text>
+        <Text style={styles.wmOne}>One</Text>
+      </View>
       <Text style={styles.subtitle}>{BRAND.tagline}</Text>
       <ActivityIndicator color={colors.primary} style={{ marginTop: 32 }} />
 
@@ -51,7 +54,9 @@ const styles = StyleSheet.create({
   },
   muLogo: { width: 88, height: 88 },
   brand: { fontSize: 12, fontWeight: '800', color: colors.primary, letterSpacing: 3, marginTop: 4 },
-  title: { fontSize: 36, fontWeight: '800', color: colors.text, letterSpacing: -0.5, marginTop: 4 },
+  wmRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 4 },
+  wmMU: { fontSize: 40, fontWeight: '900', color: colors.primary, letterSpacing: -0.5 },
+  wmOne: { fontSize: 40, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
   subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 6, fontStyle: 'italic' },
   footer: { position: 'absolute', bottom: 40, alignItems: 'center', flexDirection: 'row', gap: 8 },
   poweredText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },

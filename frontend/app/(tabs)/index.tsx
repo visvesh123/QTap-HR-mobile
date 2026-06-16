@@ -58,7 +58,7 @@ export default function Home() {
                 <Image source={{ uri: BRAND.logoUrl }} style={styles.headerLogo} resizeMode="contain" />
               </View>
               <View>
-                <Text style={styles.brandSmall}>MAHINDRA UNIVERSITY</Text>
+                <Text style={styles.brandSmall}>MUOne</Text>
                 <Text style={styles.brandTitle}>{user.role === 'admin' ? 'University Console' : "Today's Campus"}</Text>
               </View>
             </View>
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   headerLogo: { width: 26, height: 26 },
-  brandSmall: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.85)', letterSpacing: 2 },
+  brandSmall: { fontSize: 14, fontWeight: '900', color: colors.white, letterSpacing: 0.3 },
   brandTitle: { fontSize: 18, fontWeight: '700', color: colors.white, marginTop: 2 },
   iconBtn: {
     width: 42, height: 42, borderRadius: 21,
