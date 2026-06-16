@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { api, dalmartGeoValidate } from '../../src/api';
+import { api, dalmartGeoValidate, dalmartFaceValidate } from '../../src/api';
 import { useAuth } from '../../src/auth';
 import { colors, radii, shadow, spacing, clay } from '../../src/theme';
 import { Card, Pill, Badge, ScreenHeader, Empty } from '../../src/ui';
@@ -725,36 +725,50 @@ const CaptureFlow = ({
   };
 
   const snap = async () => {
-    if (Platform.OS === 'web') {
-      setSelfieUri('placeholder');
-      setTimeout(() => verify(null), 200);
-      return;
-    }
     try {
-      const photo = await camRef.current?.takePictureAsync({ quality: 0.4, base64: true, skipProcessing: true });
+      const photo = await camRef.current?.takePictureAsync({ quality: 0.5, base64: true, skipProcessing: true });
       setSelfieUri(photo?.uri || null);
-      verify(photo?.base64 || null);
+      verify(photo?.base64 || null, photo?.uri || null);
     } catch (e) {
-      verify(null);
+      verify(null, null);
     }
   };
 
-  const verify = async (b64: string | null) => {
+  const verify = async (b64: string | null, uri?: string | null) => {
     setStep('verifying');
     try {
-      const c = coords || { lat: MU_LAT, lon: MU_LON, accuracy: 8, mock: false };
-      const res = await api.attendanceCheck({
-        latitude: c.lat,
-        longitude: c.lon,
-        accuracy_m: c.accuracy,
-        type: kind,
-        attendance_type: attType,
-        selfie_b64: b64 ? 'b64-' + (b64?.length || 1) : 'placeholder',
-        is_mock_location: c.mock,
-        demo_face_outcome: null,
-      });
-      // Cinematic delay so scan animation can play
-      setTimeout(() => { setResult(res); setStep('result'); }, 2600);
+      if (!qid) throw new Error('Your account is not enabled for face attendance (no QID).');
+      if (!b64 && !uri) {
+        setResult({ accepted: false, rejection_reason: 'face_mismatch', message: 'Could not capture your photo. Please retake.' });
+        setStep('result');
+        return;
+      }
+      // Step 2: face recognition — call the dalmart service DIRECTLY (multipart).
+      const fr = await dalmartFaceValidate(qid, { base64: b64, uri });
+      const att = fr?.data?.attendance || {};
+      const st = fr?.data?.status || {};
+      const fm = fr?.data?.face_match || {};
+      const faceOk = !!fr?.success && (att.face_recognition === true || st.face_recognition === true);
+
+      if (faceOk) {
+        const markedAt = att.face_recognition_marked_at || st.face_recognition_marked_at || new Date().toISOString();
+        const curStatus = String(st.current_status || att.status || (kind === 'in' ? 'IN' : 'OUT')).toUpperCase();
+        const recType = curStatus === 'OUT' ? 'out' : curStatus === 'IN' ? 'in' : kind;
+        // Persist the verified punch with the exact face-recognition time → drives timeline & button.
+        const rec = await api.attendanceRecordDalmart({
+          type: recType,
+          marked_at: markedAt,
+          venue_id: att.venue_id ?? null,
+          venue_name: venueName,
+          confidence: fm.confidence ?? null,
+          attendance_id: att.attendance_id ?? null,
+          attendance_type: attType,
+        });
+        setTimeout(() => { setResult(rec); setStep('result'); }, 1500);
+      } else {
+        setResult({ accepted: false, rejection_reason: 'face_mismatch', message: fr?.message || 'Face not recognized. Please try again.' });
+        setStep('result');
+      }
     } catch (e: any) {
       setResult({ accepted: false, rejection_reason: 'network_error', message: e?.message });
       setStep('result');

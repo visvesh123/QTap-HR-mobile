@@ -1059,6 +1059,59 @@ async def attendance_check(body: AttendanceCheckIn, user: dict = Depends(get_cur
     return rec
 
 
+class DalmartAttendanceIn(BaseModel):
+    type: str  # "in" | "out"
+    marked_at: Optional[str] = None  # face_recognition_marked_at (ISO, UTC) from dalmart
+    venue_id: Optional[int] = None
+    venue_name: Optional[str] = None
+    confidence: Optional[float] = None
+    attendance_id: Optional[int] = None
+    attendance_type: Optional[str] = "office"
+
+
+@api.post("/attendance/record-dalmart")
+async def attendance_record_dalmart(body: DalmartAttendanceIn, user: dict = Depends(get_current_user)):
+    """Record a punch already validated (geo + face) by the external dalmart service.
+    No local geofence/face checks — dalmart is the source of truth. The provided
+    marked_at (face recognition time, UTC) becomes the punch timestamp so the timeline
+    reflects the exact dalmart time."""
+    t = (body.type or "").strip().lower()
+    if t not in ("in", "out"):
+        raise HTTPException(status_code=400, detail="Invalid type. Expected in or out.")
+    try:
+        ts = datetime.fromisoformat((body.marked_at or "").replace("Z", "+00:00"))
+    except Exception:
+        ts = datetime.now(timezone.utc)
+    status_label = _attendance_status(ts) if t == "in" else None
+    conf = body.confidence
+    rec = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "name": user["name"],
+        "department": user.get("department"),
+        "type": t,
+        "attendance_type": body.attendance_type or "office",
+        "geofence_name": body.venue_name,
+        "geofence_id": None,
+        "venue_id": body.venue_id,
+        "dalmart_attendance_id": body.attendance_id,
+        "inside_geofence": True,
+        "face_passed": True,
+        "face_score": (conf / 100.0) if isinstance(conf, (int, float)) else None,
+        "spoof_detected": False,
+        "is_mock_location": False,
+        "accepted": True,
+        "rejection_reason": None,
+        "status": status_label,
+        "timestamp": ts.isoformat(),
+        "source": "dalmart",
+        "on_campus": True,
+    }
+    await db.attendance.insert_one({**rec})
+    rec.pop("_id", None)
+    return rec
+
+
 @api.get("/attendance/history")
 async def attendance_history(user: dict = Depends(get_current_user)):
     cursor = db.attendance.find({"user_id": user["id"]}, {"_id": 0}).sort("timestamp", -1).limit(60)

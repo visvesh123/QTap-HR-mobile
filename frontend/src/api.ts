@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 const TOKEN_KEY = 'campus_hub_token';
@@ -26,6 +27,31 @@ export async function dalmartGeoValidate(
     method: 'POST',
     headers: { 'Content-Type': 'application/json', accept: '*/*' },
     body: JSON.stringify({ qid, lat, long, status }),
+  });
+  const txt = await res.text();
+  try { return txt ? JSON.parse(txt) : null; } catch { return null; }
+}
+
+/** Direct call to the dalmart face-recognition step (multipart). Bypasses our FastAPI. */
+export async function dalmartFaceValidate(
+  qid: string,
+  photo: { uri?: string | null; base64?: string | null },
+): Promise<any> {
+  const form = new FormData();
+  form.append('qid', qid);
+  if (Platform.OS === 'web') {
+    if (photo.base64) {
+      const blobRes = await fetch(`data:image/jpeg;base64,${photo.base64}`);
+      const blob = await blobRes.blob();
+      form.append('photo', blob, 'selfie.jpg');
+    }
+  } else if (photo.uri) {
+    form.append('photo', { uri: photo.uri, name: 'selfie.jpg', type: 'image/jpeg' } as any);
+  }
+  const res = await fetch(`${DALMART_BASE}/api/v2/attendance/validate/face`, {
+    method: 'POST',
+    headers: { accept: 'application/json' },
+    body: form,
   });
   const txt = await res.text();
   try { return txt ? JSON.parse(txt) : null; } catch { return null; }
@@ -86,6 +112,7 @@ export const api = {
   geoValidate: (lat: number, long: number, status: 'IN' | 'OUT') =>
     request<{ success: boolean; message: string | null; venue_id: number | null; venue_name: string | null; attendance_id: number | null; current_state: string | null }>(
       'POST', '/attendance/geo-validate', { lat, long, status }),
+  attendanceRecordDalmart: (body: any) => request('POST', '/attendance/record-dalmart', body),
   attendanceAdminToday: () => request<any>('GET', '/attendance/admin/today'),
 
   // library
