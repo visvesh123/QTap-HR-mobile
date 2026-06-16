@@ -79,8 +79,7 @@ export default function Home() {
           >
             <View style={styles.heroBrandPill}>
               <Image source={{ uri: BRAND.logoUrl }} style={styles.heroLogo} resizeMode="contain" />
-              <Text style={styles.wmMU}>MU</Text>
-              <Text style={styles.wmOne}>One</Text>
+              <Text style={styles.wmMU}>MU<Text style={styles.wmOne}>One</Text></Text>
             </View>
 
             <View style={styles.heroBottom}>
