@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
   heroBottom: { gap: 4 },
   heroDate: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.9)' },
   heroGreet: { fontSize: 32, fontWeight: '900', color: colors.white, letterSpacing: -0.5 },
-  heroGreetAccent: { color: colors.primaryLight },
+  heroGreetAccent: { color: colors.white },
   heroWeatherRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginTop: 4 },
   heroWeather: { flex: 1, fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.92)', lineHeight: 20 },
 
