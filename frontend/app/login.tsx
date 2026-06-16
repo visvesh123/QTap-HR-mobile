@@ -142,11 +142,9 @@ export default function Login() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           {/* Hero — MUOne brand */}
           <View style={styles.heroWrap}>
-            <Image
-              source={require('../assets/images/mu_logo.png')}
-              style={styles.brandLogo}
-              resizeMode="contain"
-            />
+            <View style={[styles.logoCard, clay.surface as any]}>
+              <Image source={{ uri: BRAND.logoUrl }} style={styles.logoImg} resizeMode="contain" />
+            </View>
             <View style={styles.wordmarkRow}>
               <Text style={styles.wmMU}>MU</Text>
               <Text style={styles.wmOne}>One</Text>
