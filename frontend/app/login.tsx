@@ -1,15 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
-  KeyboardAvoidingView, Platform, ActivityIndicator, LayoutAnimation, UIManager,
+  KeyboardAvoidingView, Platform, ActivityIndicator, LayoutAnimation, UIManager, Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/auth';
 import { api } from '../src/api';
-import { colors, radii, spacing, typo, clay } from '../src/theme';
+import { colors, radii, spacing, clay, BRAND } from '../src/theme';
 import { ClayCard, ClayInput, ClayLabel } from '../src/components/Clay';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -166,20 +166,16 @@ export default function Login() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          {/* Hero badge */}
+          {/* Hero — MUOne brand */}
           <View style={styles.heroWrap}>
-            <View style={[styles.heroBadgeWrap, clay.crimson as any]}>
-              <LinearGradient
-                colors={[colors.primaryLight, colors.primary, colors.primaryDark]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={styles.heroBadge}
-              >
-                <MaterialCommunityIcons name="shield-account" size={40} color={colors.white} />
-              </LinearGradient>
+            <View style={[styles.logoCard, clay.surface as any]}>
+              <Image source={{ uri: BRAND.logoUrl }} style={styles.logoImg} resizeMode="contain" />
             </View>
-            <Text style={styles.brand}>MAHINDRA UNIVERSITY</Text>
-            <Text style={styles.title}>Welcome back</Text>
-            <Text style={styles.subtitle}>Sign in to your Campus Hub</Text>
+            <View style={styles.wordmarkRow}>
+              <Text style={styles.wmMU}>MU</Text>
+              <Text style={styles.wmOne}>One</Text>
+            </View>
+            <Text style={styles.subtitle}>Mahindra University · one app for everything campus</Text>
           </View>
 
           {/* Method segmented control */}
@@ -414,14 +410,16 @@ const styles = StyleSheet.create({
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxl },
 
   heroWrap: { alignItems: 'center', marginTop: spacing.md, marginBottom: spacing.lg },
-  heroBadgeWrap: {
-    width: 88, height: 88, borderRadius: 26,
+  logoCard: {
+    width: 92, height: 92, borderRadius: 24,
+    backgroundColor: colors.white,
     alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md,
   },
-  heroBadge: { width: 88, height: 88, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  brand: { fontSize: 11, fontWeight: '800', color: colors.primary, letterSpacing: 2 },
-  title: { ...typo.h1, color: colors.clayDark, fontSize: 30, marginTop: 4 },
-  subtitle: { fontSize: 14, color: colors.clayMuted, marginTop: 4, fontWeight: '500' },
+  logoImg: { width: 58, height: 58 },
+  wordmarkRow: { flexDirection: 'row', alignItems: 'baseline' },
+  wmMU: { fontSize: 38, fontWeight: '900', color: colors.primary, letterSpacing: -0.5 },
+  wmOne: { fontSize: 38, fontWeight: '800', color: colors.clayDark, letterSpacing: -0.5 },
+  subtitle: { fontSize: 13, color: colors.clayMuted, marginTop: 6, fontWeight: '500', textAlign: 'center' },
 
   segment: {
     flexDirection: 'row', borderRadius: 22, padding: 5, gap: 4,
