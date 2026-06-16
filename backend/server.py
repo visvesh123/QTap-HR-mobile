@@ -190,6 +190,7 @@ MICROSOFT_DEMO_EMAIL = "student@mahindrauniversity.edu.in"  # default account fo
 # External MU profile directory — source of truth for OTP (phone) logins.
 PROFILE_API_BASE = "https://api-dot-dalmart.el.r.appspot.com"
 PROFILE_API_TIMEOUT = 8.0
+ATTENDANCE_VALIDATE_URL = f"{PROFILE_API_BASE}/api/v2/attendance/validate/location"
 
 SEED_EVENTS = [
     {"id": "evt1", "title": "TechFest 2026", "category": "Tech", "date": "2026-03-15", "venue": "Main Auditorium", "image": "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600", "description": "Annual technology festival with hackathons, workshops, and guest speakers from industry leaders.", "organizer": "Computer Science Club", "registered": 245},
@@ -959,6 +960,51 @@ def _attendance_status(check_in_ts: datetime) -> str:
 @api.get("/attendance/geofences")
 async def list_geofences(user: dict = Depends(get_current_user)):
     return GEOFENCES
+
+
+class GeoValidateIn(BaseModel):
+    lat: float
+    long: float
+    status: str  # "IN" | "OUT"
+
+
+@api.post("/attendance/geo-validate")
+async def attendance_geo_validate(body: GeoValidateIn, user: dict = Depends(get_current_user)):
+    """Step 1 of check-in/out: validate the user's geolocation against the external
+    MU attendance service. The frontend must NOT proceed to face recognition unless
+    this returns success=true."""
+    qid = user.get("qid")
+    if not qid:
+        raise HTTPException(status_code=400, detail="Your account is not enabled for geo attendance (no QID).")
+    status = (body.status or "").strip().upper()
+    if status not in ("IN", "OUT"):
+        raise HTTPException(status_code=400, detail="Invalid status. Expected IN or OUT.")
+
+    payload = {"qid": qid, "lat": body.lat, "long": body.long, "status": status}
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(PROFILE_API_TIMEOUT, connect=4.0)) as http:
+            resp = await http.post(ATTENDANCE_VALIDATE_URL, json=payload)
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Location service timed out. Please try again.")
+    except httpx.RequestError:
+        raise HTTPException(status_code=502, detail="Could not reach the location service. Please try again.")
+
+    try:
+        data = resp.json()
+    except ValueError:
+        raise HTTPException(status_code=502, detail="Invalid response from the location service.")
+
+    inner = data.get("data") or {}
+    venue = inner.get("venue") or {}
+    attendance = inner.get("attendance") or {}
+    return {
+        "success": bool(data.get("success")),
+        "message": data.get("message"),
+        "venue_id": venue.get("venue_id"),
+        "venue_name": venue.get("venue_name"),
+        "attendance_id": attendance.get("attendance_id"),
+        "current_state": (inner.get("status") or {}).get("current_state"),
+    }
 
 
 @api.post("/attendance/check")

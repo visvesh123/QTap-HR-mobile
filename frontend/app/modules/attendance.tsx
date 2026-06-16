@@ -647,6 +647,9 @@ const CaptureFlow = ({
   const [result, setResult] = useState<any>(null);
   const [demoOutcome, setDemoOutcome] = useState<DemoOutcome>('success');
   const [coords, setCoords] = useState<{ lat: number; lon: number; accuracy: number; mock: boolean } | null>(null);
+  const [geoState, setGeoState] = useState<'fetching' | 'validating' | 'valid' | 'invalid'>('fetching');
+  const [geoError, setGeoError] = useState<string>('');
+  const [venueName, setVenueName] = useState<string | null>(null);
   const camRef = useRef<any>(null);
   const started = useRef(false);
 
@@ -668,6 +671,8 @@ const CaptureFlow = ({
   }, [permission]);
 
   const fetchLocation = async () => {
+    setGeoState('fetching');
+    setGeoError('');
     let lat = MU_LAT, lon = MU_LON, accuracy = 8, mock = false;
     if (Platform.OS !== 'web') {
       try {
@@ -683,8 +688,23 @@ const CaptureFlow = ({
       } catch {}
     }
     setCoords({ lat, lon, accuracy, mock });
-    // brief pause so the "location captured" state is visible, then move to face
-    setTimeout(() => setStep('camera'), 1100);
+
+    // Step 1: validate geolocation with the MU attendance service. Block face on failure.
+    setGeoState('validating');
+    try {
+      const res = await api.geoValidate(lat, lon, kind === 'in' ? 'IN' : 'OUT');
+      if (res?.success) {
+        setVenueName(res.venue_name || null);
+        setGeoState('valid');
+        setTimeout(() => setStep('camera'), 1100);
+      } else {
+        setGeoError(res?.message || 'You are not within an authorized location.');
+        setGeoState('invalid');
+      }
+    } catch (e: any) {
+      setGeoError(e?.message || 'Could not validate your location. Please try again.');
+      setGeoState('invalid');
+    }
   };
 
   const snap = async () => {
@@ -762,7 +782,17 @@ const CaptureFlow = ({
             </View>
           )}
 
-          {step === 'location' && <LocationStep coords={coords} />}
+          {step === 'location' && (
+            <LocationStep
+              coords={coords}
+              geoState={geoState}
+              venueName={venueName}
+              geoError={geoError}
+              kind={kind}
+              onRetry={fetchLocation}
+              onClose={onClose}
+            />
+          )}
 
           {step === 'camera' && (
             <View>
@@ -838,47 +868,85 @@ const CaptureFlow = ({
   );
 };
 
-const LocationStep = ({ coords }: { coords: { lat: number; lon: number; accuracy: number; mock: boolean } | null }) => {
+const LocationStep = ({ coords, geoState, venueName, geoError, kind, onRetry, onClose }: {
+  coords: { lat: number; lon: number; accuracy: number; mock: boolean } | null;
+  geoState: 'fetching' | 'validating' | 'valid' | 'invalid';
+  venueName: string | null;
+  geoError: string;
+  kind: 'in' | 'out';
+  onRetry: () => void;
+  onClose: () => void;
+}) => {
   const pulse = useRef(new Animated.Value(0)).current;
+  const animating = geoState === 'fetching' || geoState === 'validating';
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.timing(pulse, { toValue: 1, duration: 1600, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-    ).start();
-  }, []);
+    );
+    if (animating) loop.start();
+    return () => loop.stop();
+  }, [animating]);
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.3] });
   const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] });
-  const done = !!coords;
+
+  const invalid = geoState === 'invalid';
+  const valid = geoState === 'valid';
+
+  const pinColor = invalid ? colors.sos : valid ? colors.success : colors.primary;
+  const pinIcon = invalid ? 'map-marker-off' : valid ? 'map-marker-check' : 'map-marker-radius';
+
+  const title =
+    geoState === 'fetching' ? 'Pinpointing your location…' :
+    geoState === 'validating' ? 'Validating your location…' :
+    valid ? 'Location verified' :
+    'Location check failed';
+
+  const sub =
+    geoState === 'fetching' ? 'Make sure GPS / location services are enabled' :
+    geoState === 'validating' ? 'Checking you are within an authorized location' :
+    valid ? (venueName ? `You are at ${venueName}` : 'You are within an authorized location') :
+    geoError;
 
   return (
     <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
       <View style={styles.locPinWrap}>
-        {!done && <Animated.View style={[styles.locPulse, { transform: [{ scale }], opacity }]} />}
-        <View style={[styles.locPin, done && { backgroundColor: colors.success }]}>
-          <MaterialCommunityIcons name={done ? 'map-marker-check' : 'map-marker-radius'} size={44} color="#FFFFFF" />
+        {animating && <Animated.View style={[styles.locPulse, { transform: [{ scale }], opacity }]} />}
+        <View style={[styles.locPin, { backgroundColor: pinColor }]}>
+          <MaterialCommunityIcons name={pinIcon as any} size={44} color="#FFFFFF" />
         </View>
       </View>
-      <Text style={styles.locTitle}>{done ? 'Location captured' : 'Pinpointing your location…'}</Text>
-      <Text style={styles.locSub}>
-        {done
-          ? `Lat ${coords!.lat.toFixed(4)}, Lon ${coords!.lon.toFixed(4)} · ±${Math.round(coords!.accuracy)}m`
-          : 'Make sure GPS / location services are enabled'}
-      </Text>
+      <Text style={styles.locTitle}>{title}</Text>
+      <Text style={[styles.locSub, invalid && { color: colors.sos, fontWeight: '600' }]}>{sub}</Text>
+
       {coords?.mock && (
         <View style={styles.locWarn}>
           <Ionicons name="warning" size={13} color={colors.sos} />
           <Text style={styles.locWarnText}>Mock location detected</Text>
         </View>
       )}
-      <View style={styles.locNextHint}>
-        {done ? (
-          <>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={styles.locNextText}>Starting face verification…</Text>
-          </>
-        ) : (
-          <Text style={styles.locNextText}>Step 1 of 2 · then a quick face check</Text>
-        )}
-      </View>
+
+      {invalid ? (
+        <View style={styles.locActions}>
+          <TouchableOpacity onPress={onRetry} style={styles.locRetryBtn} testID="geo-retry">
+            <Ionicons name="refresh" size={16} color="#FFFFFF" />
+            <Text style={styles.locRetryText}>Try Again</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={styles.locCancelBtn} testID="geo-cancel">
+            <Text style={styles.locCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.locNextHint}>
+          {valid ? (
+            <>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.locNextText}>Starting face verification…</Text>
+            </>
+          ) : (
+            <Text style={styles.locNextText}>Step 1 of 2 · Geo validation for Check-{kind}</Text>
+          )}
+        </View>
+      )}
     </View>
   );
 };
@@ -1400,6 +1468,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   locNextText: { fontSize: 12, color: colors.textMuted, fontWeight: '600' },
+  locActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg },
+  locRetryBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg, paddingVertical: 11, borderRadius: radii.pill,
+  },
+  locRetryText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
+  locCancelBtn: { paddingHorizontal: spacing.lg, paddingVertical: 11 },
+  locCancelText: { color: colors.textMuted, fontWeight: '700', fontSize: 14 },
   captureSub: { color: colors.textMuted, marginTop: 4, fontSize: 11 },
   cameraWrap: {
     aspectRatio: 3 / 4,

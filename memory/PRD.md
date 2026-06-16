@@ -49,3 +49,6 @@ See `/app/memory/test_credentials.md`.
   - Frontend: name flows to all screens via `user.name`; Profile screen shows PROFILE DETAILS card (QID/Type/Gender/Phone); Mark Attendance AUTHORIZED LOCATIONS uses `designated_locations` (falls back to geofences when empty).
   - Files: backend/server.py (otp_verify, _sync_external_profile, _user_public, UserOut), src/auth.tsx (User type), app/(tabs)/profile.tsx, app/modules/attendance.tsx.
   - Tests: backend/tests/test_external_profile_sync.py (5 pass). Note: DEMO_PHONES backfill is now dead code.
+
+## Changelog (cont.)
+- 2026-06-16: **Geo-validation Step 1 for Check-In/Out.** New backend proxy `POST /api/attendance/geo-validate` {lat,long,status} → forwards user's QID to `POST {dalmart}/api/v2/attendance/validate/location`. Returns {success,message,venue_id,venue_name,attendance_id,current_state}. Frontend CaptureFlow now: GPS → geo-validate. On success → auto-advance to face rec (shows "You are at <venue_name>"). On failure → red "Location check failed" + API message + Try Again/Cancel; BLOCKS face screen. Files: backend/server.py (GeoValidateIn, attendance_geo_validate), src/api.ts (geoValidate), app/modules/attendance.tsx (LocationStep 4-state UI, fetchLocation gating). Verified block-path live (QT208195 mid-cycle). Face recognition (Step 2) still mocked internally — to be integrated when its API is provided.

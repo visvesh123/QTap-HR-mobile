@@ -65,6 +65,9 @@ export const api = {
   attendanceToday: () => request<any>('GET', '/attendance/today'),
   attendanceStats: () => request<any>('GET', '/attendance/stats'),
   attendanceGeofences: () => request<any[]>('GET', '/attendance/geofences'),
+  geoValidate: (lat: number, long: number, status: 'IN' | 'OUT') =>
+    request<{ success: boolean; message: string | null; venue_id: number | null; venue_name: string | null; attendance_id: number | null; current_state: string | null }>(
+      'POST', '/attendance/geo-validate', { lat, long, status }),
   attendanceAdminToday: () => request<any>('GET', '/attendance/admin/today'),
 
   // library
