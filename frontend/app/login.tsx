@@ -27,8 +27,6 @@ const FALLBACK_DEMOS = [
   { role: 'admin',   email: 'admin@mahindrauniversity.edu.in',      password: 'admin123',      name: 'Prof. Suresh Mehta' },
 ];
 
-type Method = 'password' | 'otp';
-
 function MicrosoftLogo({ size = 18 }: { size?: number }) {
   const s = size / 2 - 1;
   return (
@@ -144,14 +142,16 @@ export default function Login() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           {/* Hero — MUOne brand */}
           <View style={styles.heroWrap}>
-            <View style={[styles.logoCard, clay.surface as any]}>
-              <Image source={{ uri: BRAND.logoUrl }} style={styles.logoImg} resizeMode="contain" />
-            </View>
+            <Image
+              source={require('../assets/images/mu_logo.png')}
+              style={styles.brandLogo}
+              resizeMode="contain"
+            />
             <View style={styles.wordmarkRow}>
               <Text style={styles.wmMU}>MU</Text>
               <Text style={styles.wmOne}>One</Text>
             </View>
-            <Text style={styles.subtitle}>Mahindra University · one app for everything campus</Text>
+            <Text style={styles.subtitle}>one app for everything campus</Text>
           </View>
 
           {/* Form card — OTP only */}
@@ -327,6 +327,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md,
   },
   logoImg: { width: 58, height: 58 },
+  brandLogo: { width: 250, height: 74 },
   wordmarkRow: { flexDirection: 'row', alignItems: 'baseline' },
   wmMU: { fontSize: 38, fontWeight: '900', color: colors.primary, letterSpacing: -0.5 },
   wmOne: { fontSize: 38, fontWeight: '800', color: colors.clayDark, letterSpacing: -0.5 },
