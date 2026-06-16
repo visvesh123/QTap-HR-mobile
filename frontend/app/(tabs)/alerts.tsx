@@ -57,10 +57,21 @@ function AccordionItem({ item, expanded, onToggle }: { item: Item; expanded: boo
         onPress={onToggle}
         testID={`accordion-${item.id}`}
       >
-        <View style={[styles.iconChip, { backgroundColor: `${meta.color}1A` }]}>
-          <Icon name={meta.icon} size={18} color={meta.color} />
+        {item.image ? (
+          <Image source={{ uri: item.image }} style={styles.thumb} resizeMode="cover" />
+        ) : (
+          <View style={[styles.iconChip, { backgroundColor: `${meta.color}1A` }]}>
+            <Icon name={meta.icon} size={18} color={meta.color} />
+          </View>
+        )}
+        <View style={styles.headTextWrap}>
+          <Text style={styles.headTitle} numberOfLines={expanded ? undefined : 1}>{item.title}</Text>
+          {!expanded && (
+            <Text style={styles.headSnippet} numberOfLines={1}>
+              {item.location || item.body.replace(/\s+/g, ' ').trim()}
+            </Text>
+          )}
         </View>
-        <Text style={styles.headTitle} numberOfLines={expanded ? undefined : 1}>{item.title}</Text>
         <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />
       </TouchableOpacity>
 
@@ -159,7 +170,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md, paddingVertical: 14,
   },
   iconChip: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  headTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.text },
+  thumb: { width: 52, height: 52, borderRadius: 12, backgroundColor: '#FAF7F4' },
+  headTextWrap: { flex: 1, gap: 2 },
+  headTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
+  headSnippet: { fontSize: 12, color: colors.textMuted },
 
   body: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
   bodyImage: { width: '100%', height: 440, borderRadius: radii.md, marginBottom: spacing.sm, backgroundColor: '#FAF7F4' },
