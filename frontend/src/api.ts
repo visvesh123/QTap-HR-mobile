@@ -117,5 +117,5 @@ export const api = {
   messList: (demo?: string) => request<any>('GET', `/mess/list${demo ? `?demo=${demo}` : ''}`),
 
   // weather
-  weather: () => request<{ city: string; temp_c: number | null; high_c: number | null; code: number | null; condition: string | null; unavailable?: boolean }>('GET', '/weather'),
+  weather: () => request<{ city: string; temp_c: number | null; high_c: number | null; low_c: number | null; code: number | null; condition: string | null; unavailable?: boolean }>('GET', '/weather'),
 };

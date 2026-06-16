@@ -490,7 +490,7 @@ async def weather():
             r = await client.get("https://api.open-meteo.com/v1/forecast", params={
                 "latitude": HYD_LAT, "longitude": HYD_LON,
                 "current": "temperature_2m,weather_code",
-                "daily": "temperature_2m_max",
+                "daily": "temperature_2m_max,temperature_2m_min",
                 "timezone": "auto",
             })
             r.raise_for_status()
@@ -500,17 +500,20 @@ async def weather():
         temp = cur.get("temperature_2m")
         code = cur.get("weather_code")
         highs = daily.get("temperature_2m_max") or []
+        lows = daily.get("temperature_2m_min") or []
         high = highs[0] if highs else None
+        low = lows[0] if lows else None
         return {
             "city": "Hyderabad",
             "temp_c": round(temp) if temp is not None else None,
             "high_c": round(high) if high is not None else None,
+            "low_c": round(low) if low is not None else None,
             "code": int(code) if code is not None else None,
             "condition": WMO_CONDITIONS.get(int(code), "—") if code is not None else None,
         }
     except Exception as e:
         logging.warning(f"weather fetch failed: {e}")
-        return {"city": "Hyderabad", "temp_c": None, "high_c": None, "code": None, "condition": None, "unavailable": True}
+        return {"city": "Hyderabad", "temp_c": None, "high_c": None, "low_c": None, "code": None, "condition": None, "unavailable": True}
 
 # ---------- EXAMINATIONS ----------
 @api.get("/exams/hall-ticket")

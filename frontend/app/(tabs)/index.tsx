@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ImageBackground, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/auth';
@@ -24,6 +25,22 @@ function weatherIconForCode(code: number | null): keyof typeof MaterialCommunity
   if ([71, 73, 75, 77, 85, 86].includes(code)) return 'weather-snowy';
   if ([95, 96, 99].includes(code)) return 'weather-lightning-rainy';
   return 'weather-partly-cloudy';
+}
+
+function weatherAdvisory(code: number | null, hour: number, temp: number | null): { emoji: string; text: string } {
+  const night = hour >= 19 || hour < 6;
+  if (code == null) return { emoji: '🎓', text: 'Welcome to campus — have a great day!' };
+  if ([95, 96, 99].includes(code)) return { emoji: '⛈️', text: 'Thunderstorms likely — stay indoors between classes.' };
+  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code))
+    return { emoji: '☔', text: 'Rain on campus — carry an umbrella to class.' };
+  if ([45, 48].includes(code)) return { emoji: '🌫️', text: 'Foggy out — allow extra time to reach campus.' };
+  if (temp != null && temp >= 38) return { emoji: '🥵', text: 'Scorching today — stay hydrated and keep to the shade.' };
+  if ([0, 1].includes(code))
+    return night
+      ? { emoji: '🌙', text: 'Clear skies tonight — perfect for a campus stroll.' }
+      : { emoji: '☀️', text: 'Clear skies — a great day out on the lawn.' };
+  if ([2, 3].includes(code)) return { emoji: '⛅', text: 'Cloud cover over campus — a comfortable day ahead.' };
+  return { emoji: '🌤️', text: 'Pleasant on campus today.' };
 }
 
 export default function Home() {
@@ -61,9 +78,7 @@ export default function Home() {
     : (HONORIFICS.includes((nameParts[0] || '').toLowerCase()) ? (nameParts[1] || nameParts[0]) : nameParts[0]);
   const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-  const weatherText = weather && weather.temp_c != null
-    ? `It's currently ${weather.temp_c}°C${weather.condition ? ` · ${weather.condition.toLowerCase()}` : ''} at ${weather.city}${weather.high_c != null ? `, with a high of ${weather.high_c}°C today.` : '.'}`
-    : 'Welcome to your campus — everything in one app.';
+  const advisory = weatherAdvisory(weather?.code ?? null, hour, weather?.temp_c ?? null);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -77,22 +92,37 @@ export default function Home() {
             colors={['rgba(0,0,0,0.10)', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.85)']}
             style={styles.heroOverlay}
           >
-            <View style={styles.heroBrandPill}>
-              <Image source={{ uri: BRAND.logoUrl }} style={styles.heroLogo} resizeMode="contain" />
-              <Text style={styles.wmMU}>MU<Text style={styles.wmOne}>One</Text></Text>
+            <View style={styles.heroTopRow}>
+              <View style={styles.heroBrandPill}>
+                <Image source={{ uri: BRAND.logoUrl }} style={styles.heroLogo} resizeMode="contain" />
+                <Text style={styles.wmMU}>MU<Text style={styles.wmOne}>One</Text></Text>
+              </View>
+
+              {weather && weather.temp_c != null && (
+                <View style={styles.glassChipWrap}>
+                  <BlurView intensity={32} tint="light" style={styles.glassChip}>
+                    <View style={styles.glassTopRow}>
+                      <MaterialCommunityIcons
+                        name={weatherIconForCode(weather.code)}
+                        size={22}
+                        color={colors.white}
+                      />
+                      <Text style={styles.glassTemp}>{weather.temp_c}°</Text>
+                    </View>
+                    <Text style={styles.glassHL}>
+                      H:{weather.high_c ?? '—'}°  L:{weather.low_c ?? '—'}°
+                    </Text>
+                  </BlurView>
+                </View>
+              )}
             </View>
 
             <View style={styles.heroBottom}>
               <Text style={styles.heroDate}>{dateStr}</Text>
               <Text style={styles.heroGreet}>{timeGreet}, {firstName}!</Text>
               <View style={styles.heroWeatherRow}>
-                <MaterialCommunityIcons
-                  name={weatherIconForCode(weather?.code ?? null)}
-                  size={18}
-                  color="rgba(255,255,255,0.92)"
-                  style={{ marginTop: 2 }}
-                />
-                <Text style={styles.heroWeather}>{weatherText}</Text>
+                <Text style={styles.advisoryEmoji}>{advisory.emoji}</Text>
+                <Text style={styles.heroWeather}>{advisory.text}</Text>
               </View>
             </View>
           </LinearGradient>
@@ -255,7 +285,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.clayBg },
 
   hero: {
-    height: 300,
+    width: '100%',
+    aspectRatio: 1120 / 1062,
     justifyContent: 'flex-end',
     backgroundColor: colors.clayDark,
   },
@@ -275,6 +306,19 @@ const styles = StyleSheet.create({
     borderRadius: 14, alignSelf: 'flex-start',
     ...(clay.surface as any),
   },
+  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  glassChipWrap: {
+    borderRadius: 18, overflow: 'hidden',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)',
+  },
+  glassChip: {
+    paddingHorizontal: 12, paddingVertical: 8, alignItems: 'flex-end',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  glassTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  glassTemp: { fontSize: 24, fontWeight: '800', color: colors.white },
+  glassHL: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.9)', marginTop: 1 },
+  advisoryEmoji: { fontSize: 15, marginTop: 1 },
   heroLogo: { width: 20, height: 20 },
   wmMU: { fontSize: 18, fontWeight: '900', color: colors.primary, letterSpacing: -0.3 },
   wmOne: { fontSize: 18, fontWeight: '800', color: colors.clayDark, letterSpacing: -0.3 },
