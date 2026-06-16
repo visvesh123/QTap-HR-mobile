@@ -13,7 +13,7 @@ import { api } from '../../src/api';
 import { useAuth } from '../../src/auth';
 import { colors, radii, shadow, spacing, clay } from '../../src/theme';
 import { Card, Pill, Badge, ScreenHeader, Empty } from '../../src/ui';
-import { ProgressRing, WeekStreak, TodayTimeline } from '../../src/components/AttendanceVisuals';
+import { ProgressRing, TodayTimeline } from '../../src/components/AttendanceVisuals';
 
 type AttType = 'office' | 'wfh' | 'client_visit' | 'field';
 const TYPE_META: Record<AttType, { label: string; icon: string }> = {
