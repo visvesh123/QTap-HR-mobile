@@ -576,13 +576,62 @@ async def weather():
         await db.app_meta.update_one({"key": "weather"}, {"$set": {"data": result, "ts": now_ts}}, upsert=True)
         return result
     except Exception as e:
-        logging.warning(f"weather fetch failed: {e}")
+        logging.warning(f"open-meteo fetch failed: {e}; trying wttr.in fallback")
+        fallback = await _weather_from_wttr()
+        if fallback:
+            _WEATHER_CACHE["data"] = fallback
+            _WEATHER_CACHE["ts"] = now_ts
+            await db.app_meta.update_one({"key": "weather"}, {"$set": {"data": fallback, "ts": now_ts}}, upsert=True)
+            return fallback
         if cached:
             return cached
         persisted = await db.app_meta.find_one({"key": "weather"})
         if persisted and persisted.get("data"):
             return {**persisted["data"], "stale": True}
         return {"city": "Hyderabad", "temp_c": None, "high_c": None, "low_c": None, "code": None, "condition": None, "unavailable": True}
+
+
+def _desc_to_code(desc: str) -> int:
+    d = (desc or "").lower()
+    if "thunder" in d:
+        return 95
+    if any(k in d for k in ("rain", "drizzle", "shower")):
+        return 61
+    if any(k in d for k in ("snow", "sleet", "blizzard")):
+        return 71
+    if any(k in d for k in ("fog", "mist", "haze")):
+        return 45
+    if "overcast" in d:
+        return 3
+    if "cloud" in d:
+        return 2
+    if any(k in d for k in ("sunny", "clear")):
+        return 0
+    return 2
+
+
+async def _weather_from_wttr() -> Optional[dict]:
+    """No-key fallback weather provider."""
+    try:
+        async with httpx.AsyncClient(timeout=6) as client:
+            r = await client.get("https://wttr.in/Hyderabad", params={"format": "j1"})
+            r.raise_for_status()
+            d = r.json()
+        cur = (d.get("current_condition") or [{}])[0]
+        today = (d.get("weather") or [{}])[0]
+        desc = (cur.get("weatherDesc") or [{}])[0].get("value")
+        temp = cur.get("temp_C")
+        return {
+            "city": "Hyderabad",
+            "temp_c": int(temp) if temp is not None else None,
+            "high_c": int(today["maxtempC"]) if today.get("maxtempC") else None,
+            "low_c": int(today["mintempC"]) if today.get("mintempC") else None,
+            "code": _desc_to_code(desc),
+            "condition": desc or "—",
+        }
+    except Exception as e:
+        logging.warning(f"wttr.in fetch failed: {e}")
+        return None
 
 # ---------- EXAMINATIONS ----------
 @api.get("/exams/hall-ticket")
