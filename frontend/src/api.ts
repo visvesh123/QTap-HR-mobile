@@ -23,10 +23,13 @@ export async function dalmartGeoValidate(
   long: number,
   status: 'IN' | 'OUT',
 ): Promise<any> {
+  // Round to 6 decimals (~0.11m). Prevents over-long coordinate strings that can
+  // overflow dalmart's varchar(30) location column (their server-side limit).
+  const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
   const res = await fetch(`${DALMART_BASE}/api/v2/attendance/validate/location`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', accept: '*/*' },
-    body: JSON.stringify({ qid, lat, long, status }),
+    body: JSON.stringify({ qid, lat: round6(lat), long: round6(long), status }),
   });
   const txt = await res.text();
   try { return txt ? JSON.parse(txt) : null; } catch { return null; }
