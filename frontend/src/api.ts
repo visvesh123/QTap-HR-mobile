@@ -116,6 +116,11 @@ export const api = {
     request<{ success: boolean; message: string | null; venue_id: number | null; venue_name: string | null; attendance_id: number | null; current_state: string | null }>(
       'POST', '/attendance/geo-validate', { lat, long, status }),
   attendanceRecordDalmart: (body: any) => request('POST', '/attendance/record-dalmart', body),
+  // Timeline persistence (FastAPI + Mongo): store each face-detect punch + fetch today's.
+  timelineRecord: (body: { status: 'IN' | 'OUT'; marked_at?: string; venue_name?: string; venue_id?: number; confidence?: number; response?: any }) =>
+    request<any>('POST', '/attendance/timeline', body),
+  timelineToday: () =>
+    request<{ date: string; check_in_at: string | null; check_out_at: string | null; venue: string | null; work_seconds: number }>('GET', '/attendance/timeline/today'),
   attendanceAdminToday: () => request<any>('GET', '/attendance/admin/today'),
 
   // library

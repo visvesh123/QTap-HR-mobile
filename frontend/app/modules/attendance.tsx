@@ -68,17 +68,18 @@ export default function StaffAttendanceScreen() {
   const [showCapture, setShowCapture] = useState(false);
   const [captureKind, setCaptureKind] = useState<'in' | 'out'>('in');
 
-  // ---- Dalmart-driven "today" (NO FastAPI, NO local storage). In-memory only. ----
+  // ---- Dalmart-driven "today", persisted via FastAPI (Mongo). ----
   type DToday = {
     checkInAt?: string;
     checkOutAt?: string;
     venue?: string;
-    faceResponse?: any;           // entire dalmart face-recognition JSON response (session-only)
+    faceResponse?: any;           // entire dalmart face-recognition JSON response
   };
   const [dalmartToday, setDalmartToday] = useState<DToday | null>(null);
 
-  // Updates the timeline in-memory after a successful dalmart face recognition.
-  // `status` comes directly from the button the user pressed (IN / OUT).
+  // After a successful dalmart face recognition: update the timeline in-memory for instant
+  // feedback AND persist the punch (+ full dalmart response) to FastAPI so today's timeline
+  // can be rebuilt on next screen open. `status` comes from the button the user pressed.
   const applyDalmartPunch = useCallback((payload: {
     status: 'IN' | 'OUT';
     markedAt: string;
@@ -93,17 +94,33 @@ export default function StaffAttendanceScreen() {
       if (payload.venue) next.venue = payload.venue;
       return next;
     });
+    const conf = payload.faceResponse?.data?.face_match?.confidence;
+    api.timelineRecord({
+      status: payload.status,
+      marked_at: payload.markedAt,
+      venue_name: payload.venue,
+      confidence: typeof conf === 'number' ? conf : undefined,
+      response: payload.faceResponse,
+    }).catch(() => {});
   }, []);
 
-  // History / Stats / Geofences only (Today timeline & button are dalmart-driven, no FastAPI).
+  // Loads History / Stats / Geofences AND today's timeline (persisted in FastAPI/Mongo).
   const reload = useCallback(async () => {
     try {
-      const [h, s, g] = await Promise.all([
+      const [h, s, g, today] = await Promise.all([
         api.attendanceHistory().catch(() => []),
         api.attendanceStats().catch(() => null),
         api.attendanceGeofences().catch(() => []),
+        api.timelineToday().catch(() => null),
       ]);
       setHistory(h); setStats(s); setGeofences(g);
+      if (today) {
+        setDalmartToday({
+          checkInAt: today.check_in_at || undefined,
+          checkOutAt: today.check_out_at || undefined,
+          venue: today.venue || undefined,
+        });
+      }
       if (isAdmin) {
         const tm = await api.attendanceAdminToday().catch(() => null);
         setTeam(tm);

@@ -1112,6 +1112,88 @@ async def attendance_record_dalmart(body: DalmartAttendanceIn, user: dict = Depe
     return rec
 
 
+class TimelinePunchIn(BaseModel):
+    status: str  # "IN" | "OUT" — driven by the button the user pressed
+    marked_at: Optional[str] = None  # face_recognition_marked_at (ISO, UTC) from dalmart
+    venue_name: Optional[str] = None
+    venue_id: Optional[int] = None
+    confidence: Optional[float] = None
+    response: Optional[dict] = None  # entire dalmart face-recognition JSON response
+
+
+@api.post("/attendance/timeline")
+async def attendance_timeline_record(body: TimelinePunchIn, user: dict = Depends(get_current_user)):
+    """Store a face-detect punch (check IN / OUT) already validated by dalmart, including
+    the FULL dalmart response, so today's timeline can be rebuilt when the Mark Attendance
+    screen is opened (persists across reloads and devices)."""
+    s = (body.status or "").strip().upper()
+    if s not in ("IN", "OUT"):
+        raise HTTPException(status_code=400, detail="Invalid status. Expected IN or OUT.")
+    t = "in" if s == "IN" else "out"
+    try:
+        ts = datetime.fromisoformat((body.marked_at or "").replace("Z", "+00:00"))
+    except Exception:
+        ts = datetime.now(timezone.utc)
+    status_label = _attendance_status(ts) if t == "in" else None
+    conf = body.confidence
+    rec = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "name": user.get("name"),
+        "qid": user.get("qid"),
+        "department": user.get("department"),
+        "type": t,
+        "attendance_type": "office",
+        "geofence_name": body.venue_name,
+        "venue_id": body.venue_id,
+        "inside_geofence": True,
+        "face_passed": True,
+        "face_score": (conf / 100.0) if isinstance(conf, (int, float)) else None,
+        "spoof_detected": False,
+        "is_mock_location": False,
+        "accepted": True,
+        "rejection_reason": None,
+        "status": status_label,
+        "timestamp": ts.isoformat(),
+        "source": "dalmart",
+        "on_campus": True,
+        "raw_response": body.response,  # entire dalmart face JSON response
+    }
+    await db.attendance.insert_one({**rec})
+    rec.pop("_id", None)
+    return rec
+
+
+@api.get("/attendance/timeline/today")
+async def attendance_timeline_today(user: dict = Depends(get_current_user)):
+    """Return today's check-in / check-out for the Mark Attendance timeline."""
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    cursor = db.attendance.find(
+        {"user_id": user["id"], "timestamp": {"$gte": today_start}},
+        {"_id": 0},
+    ).sort("timestamp", 1)
+    items = await cursor.to_list(200)
+    check_in = next((x for x in items if x["type"] == "in" and x.get("accepted")), None)
+    check_out = next((x for x in reversed(items) if x["type"] == "out" and x.get("accepted")), None)
+    work_seconds = 0
+    if check_in and check_out:
+        try:
+            ci = datetime.fromisoformat(check_in["timestamp"].replace("Z", "+00:00"))
+            co = datetime.fromisoformat(check_out["timestamp"].replace("Z", "+00:00"))
+            work_seconds = max(0, int((co - ci).total_seconds()))
+        except Exception:
+            work_seconds = 0
+    venue = (check_out or check_in or {}).get("geofence_name")
+    return {
+        "date": today_start[:10],
+        "check_in_at": check_in.get("timestamp") if check_in else None,
+        "check_out_at": check_out.get("timestamp") if check_out else None,
+        "venue": venue,
+        "work_seconds": work_seconds,
+        "events": items,
+    }
+
+
 @api.get("/attendance/history")
 async def attendance_history(user: dict = Depends(get_current_user)):
     cursor = db.attendance.find({"user_id": user["id"]}, {"_id": 0}).sort("timestamp", -1).limit(60)
