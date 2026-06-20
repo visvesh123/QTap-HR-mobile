@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
   KeyboardAvoidingView, Platform, ActivityIndicator, LayoutAnimation, UIManager, Image,
@@ -16,17 +16,6 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// Local fallback so demo logins are always available even if /api is slow/down.
-const FALLBACK_DEMOS = [
-  { role: 'student', email: 'student@mahindrauniversity.edu.in',    password: 'student123',    name: 'Aarav Sharma' },
-  { role: 'staff',   email: 'faculty@mahindrauniversity.edu.in',    password: 'faculty123',    name: 'Dr. Rajesh Kumar (Faculty)' },
-  { role: 'staff',   email: 'librarian@mahindrauniversity.edu.in',  password: 'librarian123',  name: 'Mrs. Anita Nair (Librarian)' },
-  { role: 'staff',   email: 'warden@mahindrauniversity.edu.in',     password: 'warden123',     name: 'Mr. Vikram Singh (Warden)' },
-  { role: 'staff',   email: 'security@mahindrauniversity.edu.in',   password: 'security123',   name: 'Mr. Ramesh Kale (Security)' },
-  { role: 'staff',   email: 'exam@mahindrauniversity.edu.in',       password: 'exam123',       name: 'Dr. Kavita Joshi (Exam Cell)' },
-  { role: 'admin',   email: 'admin@mahindrauniversity.edu.in',      password: 'admin123',      name: 'Prof. Suresh Mehta' },
-];
-
 function MicrosoftLogo({ size = 18 }: { size?: number }) {
   const s = size / 2 - 1;
   return (
@@ -41,7 +30,7 @@ function MicrosoftLogo({ size = 18 }: { size?: number }) {
 
 export default function Login() {
   const router = useRouter();
-  const { login, setSession } = useAuth();
+  const { setSession } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -52,30 +41,7 @@ export default function Login() {
   const [otp, setOtp] = useState('');
   const [otpHint, setOtpHint] = useState('');
 
-  // demo accounts
-  const [demos, setDemos] = useState<any[]>(FALLBACK_DEMOS);
-  const [demosOpen, setDemosOpen] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const result = await Promise.race([
-          api.demoAccounts(),
-          new Promise<any[]>((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000)),
-        ]);
-        if (!cancelled && (result as any[])?.length) setDemos(result as any[]);
-      } catch {}
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
   const goHome = () => router.replace('/(tabs)');
-
-  const toggleDemos = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setDemosOpen((o) => !o);
-  };
 
   // ----- OTP -----
   const onSendOtp = async () => {
@@ -119,17 +85,6 @@ export default function Login() {
       goHome();
     } catch (e: any) {
       setError(e.message || 'Microsoft sign-in failed');
-    } finally { setLoading(false); }
-  };
-
-  // ----- Demo one-tap -----
-  const oneTapLogin = async (d: any) => {
-    setError(''); setLoading(true);
-    try {
-      await login(d.email, d.password);
-      goHome();
-    } catch (e: any) {
-      setError(e.message || 'Login failed');
     } finally { setLoading(false); }
   };
 
@@ -233,50 +188,6 @@ export default function Login() {
             <MicrosoftLogo size={18} />
             <Text style={styles.msText}>Sign in with Microsoft</Text>
           </TouchableOpacity>
-
-          {/* Demo accounts (collapsible) */}
-          <TouchableOpacity
-            style={[styles.demoToggle, clay.surfaceSoft as any]}
-            onPress={toggleDemos}
-            activeOpacity={0.85}
-            testID="demo-toggle"
-          >
-            <View style={[styles.demoBolt, clay.surface as any]}>
-              <Ionicons name="flash" size={14} color={colors.gold} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.demoTitle}>Demo logins</Text>
-              <Text style={styles.demoHint}>Tap to view {demos.length} ready-to-use accounts</Text>
-            </View>
-            <Ionicons name={demosOpen ? 'chevron-up' : 'chevron-down'} size={20} color={colors.clayMuted} />
-          </TouchableOpacity>
-
-          {demosOpen && (
-            <View style={{ gap: spacing.sm, marginTop: spacing.sm }} testID="demo-accounts">
-              {demos.map((d) => (
-                <TouchableOpacity
-                  key={d.email}
-                  onPress={() => oneTapLogin(d)}
-                  style={[styles.demoCard, clay.surface as any]}
-                  activeOpacity={0.7}
-                  testID={`demo-go-${d.email}`}
-                >
-                  <View style={[styles.demoAvatar, clay.crimson as any]}>
-                    <Text style={styles.demoAvatarText}>
-                      {d.name.split(' ').map((p: string) => p[0]).slice(0, 2).join('').toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={styles.demoName}>{d.name}</Text>
-                    <Text style={styles.demoEmail} numberOfLines={1}>{d.email}</Text>
-                  </View>
-                  <View style={[styles.demoGoBtn, clay.crimson as any]}>
-                    <Ionicons name="log-in-outline" size={15} color={colors.white} />
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
 
           <Text style={styles.terms}>
             By continuing you agree to the University acceptable-use policy.

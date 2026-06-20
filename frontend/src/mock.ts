@@ -48,38 +48,12 @@ const STAFF_USER = {
   student_id: null, employee_id: 'MUCS2722', avatar: null, phone: '9059721442',
   qid: 'QT208195', gender: 'Male', type: 'Staff', designated_locations: VENUE,
 };
-const ADMIN_USER = {
-  id: 'mock-admin-suresh', email: 'admin@mahindrauniversity.edu.in',
-  name: 'Prof. Suresh Mehta', role: 'admin', department: 'Administration',
-  student_id: null, employee_id: 'MU-ADM001', avatar: null, phone: '9000000001',
-  qid: 'QADM001', gender: 'Male', type: 'Admin', designated_locations: VENUE,
-};
-const STUDENT_USER = {
-  id: 'mock-student-aarav', email: 'student@mahindrauniversity.edu.in',
-  name: 'Aarav Sharma', role: 'student', department: 'Computer Science',
-  student_id: 'MU22CS045', employee_id: null, avatar: null, phone: '9000000002',
-  qid: null, gender: 'Male', type: 'Student', designated_locations: [],
-};
 
-const DEMO_ACCOUNTS = [
-  { role: 'student', email: 'student@mahindrauniversity.edu.in', password: 'student123', name: 'Aarav Sharma' },
-  { role: 'staff', email: 'faculty@mahindrauniversity.edu.in', password: 'faculty123', name: 'Dr. Rajesh Kumar (Faculty)' },
-  { role: 'staff', email: 'warden@mahindrauniversity.edu.in', password: 'warden123', name: 'Mr. Vikram Singh (Warden)' },
-  { role: 'admin', email: 'admin@mahindrauniversity.edu.in', password: 'admin123', name: 'Prof. Suresh Mehta' },
-];
-
-function userForEmail(email?: string): any {
-  const e = (email || '').toLowerCase();
-  if (e.includes('admin')) return clone(ADMIN_USER);
-  if (e.includes('student')) return clone(STUDENT_USER);
-  if (e) return { ...clone(STAFF_USER), email: e };
-  return clone(STAFF_USER);
-}
-function userForPhone(phone?: string): any {
-  // Map demo phones to roles for RBAC testing; default to the staff identity.
-  if (phone === ADMIN_USER.phone) return clone(ADMIN_USER);
-  if (phone === STUDENT_USER.phone) return clone(STUDENT_USER);
-  return { ...clone(STAFF_USER), phone: phone || STAFF_USER.phone };
+// Single sign-in identity. Access is governed by this user's `role` (RBAC) — there
+// are intentionally NO multiple/role-switching logins; the real role will arrive
+// from your backend later and drive feature gating.
+function currentMockUser(overrides: any = {}): any {
+  return { ...clone(STAFF_USER), ...overrides };
 }
 
 // ---------- static datasets (captured from the original API) ----------
@@ -232,24 +206,24 @@ export async function dalmartFaceValidate(qid: string, _photo: { uri?: string | 
 
 // ---------- the mock API (mirrors src/api.ts `api`) ----------
 export const mockApi = {
-  // auth
+  // auth — single sign-in identity; role drives RBAC.
   login: async (email: string, _password: string, _role?: string) => {
-    await delay(); const user = userForEmail(email); await setStore(K.user, user);
+    await delay(); const user = currentMockUser(email ? { email } : {}); await setStore(K.user, user);
     return { token: `mock-token-${user.id}`, user };
   },
   otpRequest: async (phone: string) => {
     await delay(); return { ok: true, phone, demo_otp: '123456', message: 'OTP sent (demo: 123456)' };
   },
   otpVerify: async (phone: string, _code: string) => {
-    await delay(); const user = userForPhone(phone); await setStore(K.user, user);
+    await delay(); const user = currentMockUser({ phone }); await setStore(K.user, user);
     return { token: `mock-token-${user.id}`, user };
   },
-  microsoft: async (email?: string) => {
-    await delay(); const user = userForEmail(email || STAFF_USER.email); await setStore(K.user, user);
+  microsoft: async (_email?: string) => {
+    await delay(); const user = currentMockUser(); await setStore(K.user, user);
     return { token: `mock-token-${user.id}`, user };
   },
-  me: async (): Promise<any> => { await delay(60); return getStore(K.user, clone(STAFF_USER)); },
-  demoAccounts: async () => { await delay(); return clone(DEMO_ACCOUNTS); },
+  me: async (): Promise<any> => { await delay(60); return getStore(K.user, currentMockUser()); },
+  demoAccounts: async () => { await delay(); return []; },
 
   // exams
   hallTicket: async () => { await delay(); return clone(HALL_TICKET); },
