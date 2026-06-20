@@ -57,7 +57,7 @@ export default function Services() {
                 testID={`service-tile-${s.key}`}
               >
                 <View style={[styles.iconChip, { backgroundColor: `${s.color}1A` }]}>
-                  <Icon name={s.icon} size={26} color={s.color} />
+                  <Icon name={s.icon as any} size={26} color={s.color} />
                 </View>
                 <Text style={styles.tileLabel} numberOfLines={1}>{s.label}</Text>
                 <Text style={styles.tileCaption} numberOfLines={1}>{CAPTION[s.key]}</Text>
