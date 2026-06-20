@@ -31,11 +31,11 @@ export default function Profile() {
   const onLogout = () => setConfirmOpen(true);
 
   const initials = user.name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
-  const idLabel = user.qid || (user.role === 'student' ? user.student_id : user.employee_id);
-  const idTitle = user.qid ? 'QID' : 'ID NUMBER';
+  const idLabel = user.employee_id || user.qid || (user.role === 'student' ? user.student_id : user.employee_id);
+  const idTitle = user.employee_id ? 'EID' : user.qid ? 'QID' : 'ID NUMBER';
 
   const details = [
-    user.qid && { icon: 'id-card-outline', label: 'QID', value: user.qid },
+    user.employee_id && { icon: 'id-card-outline', label: 'EID', value: user.employee_id },
     (user.type || user.role) && { icon: 'briefcase-outline', label: 'Type', value: user.type || user.role },
     user.gender && { icon: 'male-female-outline', label: 'Gender', value: user.gender },
     user.phone && { icon: 'call-outline', label: 'Phone', value: `+91 ${user.phone}` },

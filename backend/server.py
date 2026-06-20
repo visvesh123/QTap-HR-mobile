@@ -456,6 +456,10 @@ async def _sync_external_profile(phone: str) -> dict:
     if not qid:
         raise HTTPException(status_code=502, detail="Profile is missing a QID.")
 
+    staff = data.get("staff_details") or {}
+    eid = staff.get("eid")
+    designation = staff.get("designation")
+
     email = (data.get("mail_id") or f"{qid}@mahindrauniversity.edu.in").strip().lower()
     now = datetime.now(timezone.utc).isoformat()
     set_fields = {
@@ -463,10 +467,12 @@ async def _sync_external_profile(phone: str) -> dict:
         "role": role,
         "type": data.get("type"),
         "qid": qid,
+        "employee_id": eid,
+        "designation": designation,
         "gender": data.get("gender"),
         "phone": phone,
         "email": email,
-        "department": data.get("type"),
+        "department": designation or data.get("type"),
         "designated_locations": data.get("designated_locations") or [],
         "source": "dalmart",
         "updated_at": now,
