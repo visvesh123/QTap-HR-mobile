@@ -56,6 +56,8 @@ See `/app/memory/test_credentials.md`.
 ## Changelog (cont.)
 - 2026-06-16: Geo-validation now calls dalmart DIRECTLY from the frontend (src/api.ts `dalmartGeoValidate`), bypassing FastAPI per user request. CORS on dalmart is open (`access-control-allow-origin: *`). Camera/face screen opens ONLY when response `data.attendance.geo_validation === true` (or `data.status.geo_validation === true`); otherwise blocked with the dalmart message. QID passed from logged-in user (user.qid). Check-In/Out button already dynamic via nextAction (recorded punches). The FastAPI `/api/attendance/geo-validate` proxy + `api.geoValidate` are now unused (kept, harmless). NOTE: dalmart returned a server-side Postgres error "value too long for type character varying(30)" for QT208195 — a dalmart-side bug; success path untestable until fixed/clean state.
 
+- 2026-06-21: **Highlighted the "Upcoming" badge on Services.** Badge now full-opacity (dimming moved to tile content only), pill-shaped with a clock icon + uppercase text + amber glow; upcoming tiles get an amber-tinted background, border, and bottom accent for emphasis. (app/(tabs)/services.tsx)
+
 ## Changelog (cont.)
 - 2026-06-21: **Disabled "Upcoming" services.** Made these inactive (non-clickable, dimmed) with an amber **"Upcoming"** badge: Home screen Mess Live card (src/components/MessLiveCard.tsx — now a non-pressable View, dimmed content, badge replaces chevron) and Services tab tiles **Mess, Leaves, Visitors** (app/(tabs)/services.tsx — UPCOMING set, disabled TouchableOpacity, grey icon, "Coming soon" caption, badge). **Mark Attendance** stays active. Verified live: 3 upcoming badges on Services + Mark Attendance enabled; Home Mess card shows Upcoming badge.
 

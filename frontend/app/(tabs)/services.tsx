@@ -55,7 +55,7 @@ export default function Services() {
             return (
               <TouchableOpacity
                 key={s.key}
-                style={[styles.tile, { width: TILE_W }, upcoming && styles.tileDisabled]}
+                style={[styles.tile, { width: TILE_W }, upcoming && styles.tileUpcoming]}
                 onPress={() => { if (!upcoming) router.push(s.route as any); }}
                 activeOpacity={upcoming ? 1 : 0.85}
                 disabled={upcoming}
@@ -63,15 +63,18 @@ export default function Services() {
               >
                 {upcoming && (
                   <View style={styles.upcomingBadge} testID={`upcoming-badge-${s.key}`}>
-                    <Text style={styles.upcomingBadgeText}>Upcoming</Text>
+                    <MaterialCommunityIcons name="clock-outline" size={10} color={colors.white} />
+                    <Text style={styles.upcomingBadgeText}>UPCOMING</Text>
                   </View>
                 )}
-                <View style={[styles.iconChip, { backgroundColor: `${s.color}1A` }, upcoming && styles.iconChipDim]}>
-                  <Icon name={s.icon as any} size={26} color={upcoming ? colors.textMuted : s.color} />
+                <View style={[styles.tileBody, upcoming && styles.contentDim]}>
+                  <View style={[styles.iconChip, { backgroundColor: `${s.color}1A` }, upcoming && styles.iconChipDim]}>
+                    <Icon name={s.icon as any} size={26} color={upcoming ? colors.textMuted : s.color} />
+                  </View>
+                  <Text style={styles.tileLabel} numberOfLines={1}>{s.label}</Text>
+                  <Text style={styles.tileCaption} numberOfLines={1}>{upcoming ? 'Coming soon' : CAPTION[s.key]}</Text>
                 </View>
-                <Text style={styles.tileLabel} numberOfLines={1}>{s.label}</Text>
-                <Text style={styles.tileCaption} numberOfLines={1}>{upcoming ? 'Coming soon' : CAPTION[s.key]}</Text>
-                <View style={[styles.accent, { backgroundColor: upcoming ? colors.textMuted : s.color }]} />
+                <View style={[styles.accent, { backgroundColor: upcoming ? '#F59E0B' : s.color }]} />
               </TouchableOpacity>
             );
           })}
@@ -122,14 +125,23 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   iconChipDim: { backgroundColor: '#EEF1F4' },
-  tileDisabled: { opacity: 0.6 },
-  upcomingBadge: {
-    position: 'absolute', top: 7, right: 7, zIndex: 2,
-    backgroundColor: '#F59E0B',
-    borderRadius: 9,
-    paddingHorizontal: 7, paddingVertical: 2.5,
+  tileBody: { alignItems: 'center', width: '100%' },
+  contentDim: { opacity: 0.5 },
+  tileUpcoming: {
+    borderWidth: 1.5,
+    borderColor: '#FCD9A0',
+    backgroundColor: '#FFFBF2',
   },
-  upcomingBadgeText: { fontSize: 8.5, fontWeight: '800', color: colors.white, letterSpacing: 0.3 },
+  upcomingBadge: {
+    position: 'absolute', top: 8, right: 8, zIndex: 3,
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: '#F59E0B',
+    borderRadius: 999,
+    paddingHorizontal: 9, paddingVertical: 4,
+    shadowColor: '#F59E0B', shadowOpacity: 0.45, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  upcomingBadgeText: { fontSize: 9.5, fontWeight: '900', color: colors.white, letterSpacing: 0.6 },
   tileLabel: { fontSize: 13, fontWeight: '800', color: colors.text, textAlign: 'center' },
   tileCaption: { fontSize: 10.5, color: colors.textMuted, marginTop: 2, textAlign: 'center' },
   accent: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3 },
