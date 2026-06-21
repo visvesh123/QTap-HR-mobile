@@ -78,7 +78,7 @@ export default function Services() {
             return (
               <TouchableOpacity
                 key={s.key}
-                style={[styles.tile, { width: TILE_W }, upcoming && styles.tileUpcoming]}
+                style={[styles.tile, { width: TILE_W }]}
                 onPress={() => { if (!upcoming) router.push(s.route as any); }}
                 activeOpacity={upcoming ? 1 : 0.85}
                 disabled={upcoming}
@@ -94,7 +94,7 @@ export default function Services() {
                   <Text style={styles.tileLabel} numberOfLines={1}>{s.label}</Text>
                   <Text style={styles.tileCaption} numberOfLines={1}>{upcoming ? 'Coming soon' : CAPTION[s.key]}</Text>
                 </View>
-                <View style={[styles.accent, { backgroundColor: upcoming ? '#F59E0B' : s.color }]} />
+                <View style={[styles.accent, { backgroundColor: upcoming ? colors.border : s.color }]} />
               </TouchableOpacity>
             );
           })}
@@ -147,11 +147,6 @@ const styles = StyleSheet.create({
   iconChipDim: { backgroundColor: '#EEF1F4' },
   tileBody: { alignItems: 'center', width: '100%' },
   contentDim: { opacity: 0.5 },
-  tileUpcoming: {
-    borderWidth: 1.5,
-    borderColor: '#FCD9A0',
-    backgroundColor: '#FFFBF2',
-  },
   upcomingBadge: {
     position: 'absolute', top: 8, right: 8, zIndex: 3,
     flexDirection: 'row', alignItems: 'center', gap: 3,

@@ -202,10 +202,8 @@ export default function Home() {
           const countdown = d <= 0 ? 'Today' : d === 1 ? 'Tomorrow' : `in ${d} days`;
           const dt = new Date(`${holiday.date}T00:00:00`);
           return (
-            <TouchableOpacity
-              activeOpacity={0.9}
+            <View
               style={styles.holidayCard}
-              onPress={() => router.push('/modules/leave')}
               testID="holiday-card"
             >
               <View style={styles.holidayDate}>
@@ -221,7 +219,7 @@ export default function Home() {
                 <MaterialCommunityIcons name="calendar-clock" size={14} color={colors.primary} />
                 <Text style={styles.holidayPillText}>{countdown}</Text>
               </View>
-            </TouchableOpacity>
+            </View>
           );
         })()}
 
