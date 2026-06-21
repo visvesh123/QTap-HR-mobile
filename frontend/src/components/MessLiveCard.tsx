@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../api';
 import { colors, radii, shadow, spacing } from '../theme';
 
@@ -26,7 +25,6 @@ type Mess = {
 };
 
 export default function MessLiveCard() {
-  const router = useRouter();
   const [data, setData] = useState<{ meal: string; messes: Mess[] } | null>(null);
 
   useEffect(() => {
@@ -48,13 +46,8 @@ export default function MessLiveCard() {
   const recommended = messes.find((m) => m.recommended);
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.9}
-      onPress={() => router.push('/modules/mess')}
-      style={styles.wrap}
-      testID="mess-live-card"
-    >
-      <View style={styles.headRow}>
+    <View style={styles.wrap} testID="mess-live-card">
+      <View style={[styles.headRow, styles.dim]}>
         <View style={styles.iconWrap}>
           <MaterialCommunityIcons name="silverware-fork-knife" size={18} color={colors.white} />
         </View>
@@ -70,15 +63,17 @@ export default function MessLiveCard() {
                 : 'Check capacity before you go'}
           </Text>
         </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        <View style={styles.upcomingBadge} testID="mess-live-upcoming-badge">
+          <Text style={styles.upcomingBadgeText}>Upcoming</Text>
+        </View>
       </View>
 
-      <View style={styles.row}>
+      <View style={[styles.row, styles.dim]}>
         {messes.map((m) => (
           <MiniCapacityBar key={m.id} mess={m} closed={isClosed} />
         ))}
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -136,6 +131,13 @@ const styles = StyleSheet.create({
   },
   kicker: { fontSize: 10, fontWeight: '700', letterSpacing: 1.2, color: colors.textMuted },
   title: { fontSize: 14, fontWeight: '700', color: colors.text, marginTop: 1 },
+  dim: { opacity: 0.55 },
+  upcomingBadge: {
+    backgroundColor: '#F59E0B',
+    borderRadius: 9,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  upcomingBadgeText: { fontSize: 9.5, fontWeight: '800', color: colors.white, letterSpacing: 0.3 },
   row: {
     flexDirection: 'row',
     gap: 10,
