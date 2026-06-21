@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -17,6 +17,29 @@ const CAPTION: Record<string, string> = {
 
 // Services that are not yet live — shown disabled with an "Upcoming" badge.
 const UPCOMING = new Set(['leave', 'visitor', 'mess']);
+
+// Subtly pulsing "Upcoming" badge to gently draw the eye.
+function UpcomingBadge({ testID }: { testID?: string }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.09] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.72] });
+  return (
+    <Animated.View style={[styles.upcomingBadge, { transform: [{ scale }], opacity }]} testID={testID}>
+      <MaterialCommunityIcons name="clock-outline" size={10} color={colors.white} />
+      <Text style={styles.upcomingBadgeText}>UPCOMING</Text>
+    </Animated.View>
+  );
+}
 
 const GAP = 12;
 const H_PAD = spacing.md;
@@ -62,10 +85,7 @@ export default function Services() {
                 testID={`service-tile-${s.key}`}
               >
                 {upcoming && (
-                  <View style={styles.upcomingBadge} testID={`upcoming-badge-${s.key}`}>
-                    <MaterialCommunityIcons name="clock-outline" size={10} color={colors.white} />
-                    <Text style={styles.upcomingBadgeText}>UPCOMING</Text>
-                  </View>
+                  <UpcomingBadge testID={`upcoming-badge-${s.key}`} />
                 )}
                 <View style={[styles.tileBody, upcoming && styles.contentDim]}>
                   <View style={[styles.iconChip, { backgroundColor: `${s.color}1A` }, upcoming && styles.iconChipDim]}>
