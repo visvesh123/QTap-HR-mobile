@@ -65,6 +65,7 @@ export const SECTIONED_SERVICES = (role: string, department?: string) => {
 // Dedicated, fixed list shown in the Services tab.
 export const TAB_SERVICES: ServiceItem[] = [
   { key: 'attendance', label: 'Mark Attendance', icon: 'map-marker-account-outline', iconLib: 'mci', color: '#06B6D4', route: '/modules/attendance', roles: ['student', 'staff', 'admin'] },
+  { key: 'tickets', label: 'Tickets', icon: 'ticket-outline', iconLib: 'mci', color: '#7C3AED', route: '/modules/tickets', roles: ['student', 'staff', 'admin'] },
   { key: 'leave', label: 'Leaves', icon: 'calendar-account-outline', iconLib: 'mci', color: '#7D3ECF', route: '/modules/leave', roles: ['student', 'staff', 'admin'] },
   { key: 'visitor', label: 'Visitors', icon: 'badge-account-horizontal-outline', iconLib: 'mci', color: '#3B82F6', route: '/modules/visitor', roles: ['student', 'staff', 'admin'] },
   { key: 'mess', label: 'Mess', icon: 'silverware-fork-knife', iconLib: 'mci', color: '#16A34A', route: '/modules/mess', roles: ['student', 'staff', 'admin'] },

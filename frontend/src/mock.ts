@@ -37,6 +37,7 @@ const K = {
   complaints: 'mock_complaints',
   visitors: 'mock_visitors',
   issues: 'mock_book_issues',
+  tickets: 'mock_tickets',
 };
 
 // ---------- mock identities (used for role-based access later) ----------
@@ -202,6 +203,48 @@ export async function dalmartFaceValidate(qid: string, _photo: { uri?: string | 
       face_match: { matched: true, image_id: qid, confidence: 99.2 },
     },
   };
+}
+
+// ---------- tickets ----------
+const TICKET_DEPARTMENTS = [
+  'QTap', 'IT Services', 'School of Engineering', 'Examination Cell',
+  'Library', 'Hostel & Accommodation', 'Finance & Accounts', 'Administration',
+];
+
+function seedTickets(): any[] {
+  return [{
+    id: 'tkt_18',
+    ticket_no: 'TKT-00018',
+    subject: 'Login issue',
+    description: 'QTap is unable to login',
+    department: 'QTap',
+    status: 'Closed',
+    priority: 'High',
+    channel: 'Portal',
+    created_at: '2026-06-22T19:24:53',
+    updated_at: '2026-06-22T19:34:51',
+    journey: ['QTap', 'IT Services', 'Closed'],
+    messages: [
+      { id: 'm1', author: 'You', author_type: 'requester', text: 'QTap is unable to login', at: '2026-06-22T19:24:53' },
+      { id: 'm2', author: 'QTap', author_type: 'dept', text: 'Please send screenshot', at: '2026-06-22T19:31:41' },
+      { id: 't1', author_type: 'transfer', from: 'QTAP', to: 'IT SERVICES', by: 'QTap', at: '2026-06-22T19:32:00' },
+      { id: 'm3', author: 'IT Services', author_type: 'dept', text: 'Resolved', at: '2026-06-22T19:34:51' },
+    ],
+    activity: [
+      { id: 'a1', type: 'created', label: 'Ticket created', at: '2026-06-22T19:24:00' },
+      { id: 'a2', type: 'status', label: 'Status changed to In Progress', at: '2026-06-22T19:30:00' },
+      { id: 'a3', type: 'comment', label: 'Comment from QTap', at: '2026-06-22T19:31:00' },
+      { id: 'a4', type: 'transfer', label: 'Transferred from QTap to IT Services', at: '2026-06-22T19:32:00', note: "It's not with QTAP. Mail ID issue" },
+      { id: 'a5', type: 'status', label: 'Status changed to In Progress', at: '2026-06-22T19:34:00' },
+      { id: 'a6', type: 'comment', label: 'Comment from IT Services', at: '2026-06-22T19:34:30' },
+    ],
+  }];
+}
+
+async function getTickets(): Promise<any[]> {
+  let list = await getStore<any[] | null>(K.tickets, null);
+  if (!list) { list = seedTickets(); await setStore(K.tickets, list); }
+  return list;
 }
 
 // ---------- the mock API (mirrors src/api.ts `api`) ----------
@@ -375,4 +418,78 @@ export const mockApi = {
   // holidays & news
   holidays: async () => { await delay(); return { upcoming: clone(HOLIDAYS), holidays: clone(HOLIDAYS) }; },
   news: async () => { await delay(); return clone(NEWS); },
+
+  // tickets
+  ticketDepartments: async () => { await delay(60); return clone(TICKET_DEPARTMENTS); },
+  ticketLookup: async (studentId?: string) => {
+    await delay(450);
+    const u = await getStore<any>(K.user, currentMockUser());
+    return {
+      id: (studentId && studentId.trim()) || u.qid || u.employee_id || u.id,
+      name: u.name,
+      program: u.role === 'student' ? 'B.Tech — Computer Science' : (u.type || u.department || '—'),
+      department: u.department || '—',
+      year: u.role === 'student' ? '3rd Year' : (u.type || 'Staff'),
+      email: u.email,
+      mobile: u.phone ? `+91 ${u.phone}` : '—',
+    };
+  },
+  ticketsList: async () => { await delay(); return getTickets(); },
+  ticketDetail: async (id: string) => {
+    await delay();
+    const list = await getTickets();
+    return list.find((t) => t.id === id || t.ticket_no === id) || null;
+  },
+  createTicket: async (payload: { subject: string; description: string; department: string; requester?: any }) => {
+    await delay();
+    const list = await getTickets();
+    const maxNo = list.reduce((m, t) => Math.max(m, parseInt(String(t.ticket_no).replace(/\D/g, '')) || 0), 0);
+    const no = maxNo + 1;
+    const now = nowIso().slice(0, 19);
+    const rec = {
+      id: `tkt_${no}`,
+      ticket_no: `TKT-${String(no).padStart(5, '0')}`,
+      subject: payload.subject,
+      description: payload.description,
+      department: payload.department,
+      status: 'Open',
+      priority: null,
+      channel: 'Portal',
+      requester: payload.requester || null,
+      created_at: now,
+      updated_at: now,
+      journey: [payload.department, 'Open'],
+      messages: [{ id: 'm1', author: 'You', author_type: 'requester', text: payload.description, at: now }],
+      activity: [{ id: 'a1', type: 'created', label: 'Ticket created', at: now }],
+    };
+    const next = [rec, ...list];
+    await setStore(K.tickets, next);
+    return rec;
+  },
+  addTicketComment: async (id: string, text: string) => {
+    await delay();
+    const list = await getTickets();
+    const t = list.find((x) => x.id === id || x.ticket_no === id);
+    if (t) {
+      const now = nowIso().slice(0, 19);
+      t.messages.push({ id: `m${t.messages.length + 1}`, author: 'You', author_type: 'requester', text, at: now });
+      t.activity.push({ id: `a${t.activity.length + 1}`, type: 'comment', label: 'Comment from You', at: now });
+      t.updated_at = now;
+      await setStore(K.tickets, list);
+    }
+    return t;
+  },
+  reopenTicket: async (id: string) => {
+    await delay();
+    const list = await getTickets();
+    const t = list.find((x) => x.id === id || x.ticket_no === id);
+    if (t) {
+      const now = nowIso().slice(0, 19);
+      t.status = 'In Progress';
+      t.activity.push({ id: `a${t.activity.length + 1}`, type: 'status', label: 'Ticket reopened', at: now });
+      t.updated_at = now;
+      await setStore(K.tickets, list);
+    }
+    return t;
+  },
 };
