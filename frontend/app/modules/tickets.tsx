@@ -72,9 +72,7 @@ export default function Tickets() {
 
 // ---------------- Raise a Ticket ----------------
 function RaiseForm({ onCreated }: { onCreated: () => void }) {
-  const [studentId, setStudentId] = useState('');
   const [profile, setProfile] = useState<any>(null);
-  const [looking, setLooking] = useState(false);
   const [dept, setDept] = useState('');
   const [deptOpen, setDeptOpen] = useState(false);
   const [departments, setDepartments] = useState<string[]>([]);
@@ -84,23 +82,10 @@ function RaiseForm({ onCreated }: { onCreated: () => void }) {
 
   useEffect(() => {
     (async () => {
-      try {
-        const me = await api.me();
-        setStudentId(me?.qid || me?.employee_id || me?.id || '');
-      } catch {}
+      try { setProfile(await api.ticketLookup()); } catch {}
       try { setDepartments(await api.ticketDepartments()); } catch {}
     })();
   }, []);
-
-  const lookup = async () => {
-    setLooking(true);
-    try {
-      const p = await api.ticketLookup(studentId);
-      setProfile(p);
-    } catch {
-      Alert.alert('Lookup failed', 'Could not find this ID.');
-    } finally { setLooking(false); }
-  };
 
   const create = async () => {
     if (!dept) { Alert.alert('Department required', 'Please select a department.'); return; }
@@ -120,32 +105,10 @@ function RaiseForm({ onCreated }: { onCreated: () => void }) {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xxl }} keyboardShouldPersistTaps="handled">
-        {/* Requester lookup */}
-        <Text style={styles.label}>Student / Staff ID</Text>
-        <View style={styles.lookupRow}>
-          <View style={[styles.input, { flex: 1, marginBottom: 0 }]}>
-            <Ionicons name="person-outline" size={16} color={colors.textMuted} />
-            <TextInput
-              style={styles.inputText}
-              value={studentId}
-              onChangeText={setStudentId}
-              placeholder="Enter ID"
-              placeholderTextColor={colors.textMuted}
-              testID="ticket-id-input"
-            />
-          </View>
-          <TouchableOpacity style={styles.lookupBtn} onPress={lookup} disabled={looking} activeOpacity={0.85} testID="ticket-lookup-btn">
-            {looking ? <ActivityIndicator color={colors.white} size="small" /> : (
-              <>
-                <Ionicons name="search" size={15} color={colors.white} />
-                <Text style={styles.lookupBtnText}>Lookup</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-
+        {/* Requester — auto-loaded from your account */}
+        <Text style={styles.label}>Requester</Text>
         {profile && (
-          <View style={styles.profileCard} testID="ticket-profile-card">
+          <View style={[styles.profileCard, { marginTop: 0 }]} testID="ticket-profile-card">
             <View style={styles.profileHead}>
               <View style={styles.profileAvatar}>
                 <Text style={styles.profileAvatarText}>
