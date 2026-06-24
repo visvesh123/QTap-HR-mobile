@@ -38,6 +38,7 @@ const K = {
   visitors: 'mock_visitors',
   issues: 'mock_book_issues',
   tickets: 'mock_tickets',
+  ticketReads: 'mock_ticket_reads',
 };
 
 // ---------- mock identities (used for role-based access later) ----------
@@ -434,11 +435,23 @@ export const mockApi = {
       mobile: u.phone ? `+91 ${u.phone}` : '—',
     };
   },
-  ticketsList: async () => { await delay(); return getTickets(); },
+  ticketsList: async () => {
+    await delay();
+    const list = await getTickets();
+    const reads = await getStore<Record<string, string>>(K.ticketReads, {});
+    return list.map((t) => ({ ...t, unread: !reads[t.id] || reads[t.id] < t.updated_at }));
+  },
   ticketDetail: async (id: string) => {
     await delay();
     const list = await getTickets();
-    return list.find((t) => t.id === id || t.ticket_no === id) || null;
+    const t = list.find((x) => x.id === id || x.ticket_no === id) || null;
+    if (t) {
+      // Opening a ticket marks it read up to its latest update.
+      const reads = await getStore<Record<string, string>>(K.ticketReads, {});
+      reads[t.id] = nowIso();
+      await setStore(K.ticketReads, reads);
+    }
+    return t;
   },
   createTicket: async (payload: { subject: string; description: string; department: string; requester?: any }) => {
     await delay();
@@ -464,6 +477,9 @@ export const mockApi = {
     };
     const next = [rec, ...list];
     await setStore(K.tickets, next);
+    const reads = await getStore<Record<string, string>>(K.ticketReads, {});
+    reads[rec.id] = nowIso();
+    await setStore(K.ticketReads, reads);
     return rec;
   },
   addTicketComment: async (id: string, text: string) => {

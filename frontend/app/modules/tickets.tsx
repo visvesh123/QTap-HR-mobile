@@ -24,6 +24,19 @@ export function fmtDateTime(iso?: string) {
   return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
+export function timeAgo(iso?: string) {
+  if (!iso) return '';
+  const d = new Date(iso).getTime();
+  if (isNaN(d)) return '';
+  const s = Math.max(0, Math.floor((Date.now() - d) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
+  const dd = Math.floor(h / 24); if (dd < 30) return `${dd}d ago`;
+  const mo = Math.floor(dd / 30); if (mo < 12) return `${mo}mo ago`;
+  return `${Math.floor(mo / 12)}y ago`;
+}
+
 export default function Tickets() {
   const router = useRouter();
   const [tab, setTab] = useState<'raise' | 'my'>('raise');
@@ -258,9 +271,17 @@ function ProfileField({ label, value, full }: { label: string; value: string; fu
 }
 
 // ---------------- My Tickets ----------------
+const FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'open', label: 'Open' },
+  { key: 'closed', label: 'Closed' },
+] as const;
+type FilterKey = typeof FILTERS[number]['key'];
+
 function MyTickets({ router }: { router: any }) {
   const [loading, setLoading] = useState(true);
   const [tickets, setTickets] = useState<any[]>([]);
+  const [filter, setFilter] = useState<FilterKey>('all');
 
   const load = useCallback(async () => {
     try { setTickets(await api.ticketsList()); } catch {}
@@ -271,44 +292,81 @@ function MyTickets({ router }: { router: any }) {
 
   if (loading) return <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.xl }} />;
 
+  const counts = {
+    all: tickets.length,
+    open: tickets.filter((t) => t.status !== 'Closed').length,
+    closed: tickets.filter((t) => t.status === 'Closed').length,
+  };
+  const visible = tickets.filter((t) =>
+    filter === 'all' ? true : filter === 'closed' ? t.status === 'Closed' : t.status !== 'Closed');
+
   return (
-    <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xxl, gap: spacing.sm }}>
-      {tickets.length === 0 ? (
-        <Empty icon="ticket-outline" message="No tickets yet. Raise one to get started." />
-      ) : tickets.map((t) => (
-        <TouchableOpacity
-          key={t.id}
-          style={styles.ticketCard}
-          onPress={() => router.push(`/modules/ticket-detail?id=${t.id}`)}
-          activeOpacity={0.85}
-          testID={`ticket-${t.id}`}
-        >
-          <View style={styles.ticketTop}>
-            <Text style={styles.ticketNo}>{t.ticket_no}</Text>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              {!!t.priority && (
-                <View style={[styles.tag, { backgroundColor: `${PRIORITY_COLOR[t.priority] || colors.textMuted}1A` }]}>
-                  <Text style={[styles.tagText, { color: PRIORITY_COLOR[t.priority] || colors.textMuted }]}>{t.priority}</Text>
+    <View style={{ flex: 1 }}>
+      {/* Status filter */}
+      <View style={styles.filterRow}>
+        {FILTERS.map((f) => (
+          <TouchableOpacity
+            key={f.key}
+            style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
+            onPress={() => setFilter(f.key)}
+            activeOpacity={0.8}
+            testID={`ticket-filter-${f.key}`}
+          >
+            <Text style={[styles.filterText, filter === f.key && { color: colors.white }]}>{f.label}</Text>
+            <View style={[styles.filterCount, filter === f.key && styles.filterCountActive]}>
+              <Text style={[styles.filterCountText, filter === f.key && { color: colors.white }]}>{counts[f.key]}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xxl, gap: spacing.sm }}>
+        {visible.length === 0 ? (
+          <Empty icon="ticket-outline" message={filter === 'all' ? 'No tickets yet. Raise one to get started.' : `No ${filter} tickets.`} />
+        ) : visible.map((t) => (
+          <TouchableOpacity
+            key={t.id}
+            style={styles.ticketCard}
+            onPress={() => router.push(`/modules/ticket-detail?id=${t.id}`)}
+            activeOpacity={0.85}
+            testID={`ticket-${t.id}`}
+          >
+            <View style={styles.ticketTop}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {t.unread && <View style={styles.unreadDot} testID={`ticket-unread-${t.id}`} />}
+                <Text style={styles.ticketNo}>{t.ticket_no}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {!!t.priority && (
+                  <View style={[styles.tag, { backgroundColor: `${PRIORITY_COLOR[t.priority] || colors.textMuted}1A` }]}>
+                    <Text style={[styles.tagText, { color: PRIORITY_COLOR[t.priority] || colors.textMuted }]}>{t.priority}</Text>
+                  </View>
+                )}
+                <View style={[styles.tag, { backgroundColor: `${STATUS_COLOR[t.status] || colors.textMuted}1A` }]}>
+                  <Text style={[styles.tagText, { color: STATUS_COLOR[t.status] || colors.textMuted }]}>{t.status}</Text>
                 </View>
-              )}
-              <View style={[styles.tag, { backgroundColor: `${STATUS_COLOR[t.status] || colors.textMuted}1A` }]}>
-                <Text style={[styles.tagText, { color: STATUS_COLOR[t.status] || colors.textMuted }]}>{t.status}</Text>
               </View>
             </View>
-          </View>
-          <Text style={styles.ticketSubject} numberOfLines={1}>{t.subject}</Text>
-          <View style={styles.journeyRow}>
-            {(t.journey || []).map((j: string, i: number) => (
-              <React.Fragment key={`${j}-${i}`}>
-                {i > 0 && <Ionicons name="chevron-forward" size={11} color={colors.textMuted} />}
-                <Text style={styles.journeyChip}>{j}</Text>
-              </React.Fragment>
-            ))}
-          </View>
-          <Text style={styles.ticketDate}>Created {fmtDateTime(t.created_at)}</Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+            <Text style={[styles.ticketSubject, t.unread && { fontWeight: '800' }]} numberOfLines={1}>{t.subject}</Text>
+            <View style={styles.journeyRow}>
+              {(t.journey || []).map((j: string, i: number) => (
+                <React.Fragment key={`${j}-${i}`}>
+                  {i > 0 && <Ionicons name="chevron-forward" size={11} color={colors.textMuted} />}
+                  <Text style={styles.journeyChip}>{j}</Text>
+                </React.Fragment>
+              ))}
+            </View>
+            <View style={styles.ticketFootRow}>
+              <View style={styles.updatedWrap}>
+                <Ionicons name="time-outline" size={12} color={t.unread ? colors.primary : colors.textMuted} />
+                <Text style={[styles.ticketDate, t.unread && { color: colors.primary, fontWeight: '700' }]}>Updated {timeAgo(t.updated_at)}</Text>
+              </View>
+              {t.unread && <Text style={styles.newBadge}>NEW</Text>}
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -374,6 +432,24 @@ const styles = StyleSheet.create({
   modalRowText: { fontSize: 14, color: colors.text },
 
   ticketCard: { backgroundColor: colors.white, borderRadius: radii.lg, padding: spacing.md, ...shadow.card },
+  filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: spacing.md, paddingTop: spacing.xs },
+  filterChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
+    backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border,
+  },
+  filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  filterText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
+  filterCount: { minWidth: 20, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999, backgroundColor: colors.steel100, alignItems: 'center' },
+  filterCountActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  filterCountText: { fontSize: 11, fontWeight: '800', color: colors.textSecondary },
+  unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
+  ticketFootRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
+  updatedWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  newBadge: {
+    fontSize: 9, fontWeight: '900', color: colors.white, letterSpacing: 0.5,
+    backgroundColor: colors.primary, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden',
+  },
   ticketTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   ticketNo: { fontSize: 13, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 },
   tag: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
