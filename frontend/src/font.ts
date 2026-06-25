@@ -31,14 +31,19 @@ function applyNativePatch() {
       if ((flat as any).fontFamily) return origin;
       const weight = String((flat as any).fontWeight || '400');
       const fontFamily = SORA_MAP[weight as keyof typeof SORA_MAP] || 'Sora-Regular';
+      // IMPORTANT (iOS): each Sora weight is a SEPARATE font family. If we keep
+      // the numeric fontWeight alongside a named variant (e.g. 'Sora-ExtraBold'
+      // + fontWeight 800), iOS tries to find a *bolder* face of that variant,
+      // fails, and silently falls back to the system font. So we DROP
+      // fontWeight and let the family name carry the weight.
+      const { fontWeight: _omitWeight, ...rest } = flat as any;
       return {
         ...origin,
         props: {
           ...origin.props,
-          // IMPORTANT: merge into a single object (not an array). RN-Web throws
-          // "Failed to set an indexed property on CSSStyleDeclaration" when an
-          // array style reaches a nested text <span>.
-          style: { fontFamily, ...(flat as object) },
+          // Single object (not an array): RN-Web throws on array styles reaching
+          // nested text <span>s.
+          style: { ...rest, fontFamily },
         },
       };
     };

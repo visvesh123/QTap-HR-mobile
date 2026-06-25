@@ -323,10 +323,22 @@ frontend:
         -agent: "main"
         -comment: "Redesigned Services tab to a minimalist 3-column white-tile grid (crimson icons, label bottom-left), matching Home palette. USER BUG: tiles showed no shadow/border on web. ROOT CAUSE: tile had overflow:'hidden' which clipped the web box-shadow. FIX: removed overflow:'hidden', added borderWidth:1 borderColor #EEEFF1, and stronger SOFT shadow (web boxShadow dual-layer). Active tiles: service-tile-attendance, service-tile-tickets navigate on press. Upcoming (leave/visitor/mess) are dimmed (opacity 0.55), disabled, with a small pulsing red dot badge. Verify: (1) all 5 tiles render in a 3-col grid with visible border + drop shadow, (2) Mark Attendance tile -> /modules/attendance, (3) Tickets tile -> /modules/tickets, (4) upcoming tiles are non-clickable."
 
+  - task: "Sora font on native (Expo Go iPhone) — fontWeight conflict fix"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/font.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "USER BUG: Sora font not showing in Expo Go on iPhone (renders system font). ROOT CAUSE: native Text.render patch injected a named Sora variant (e.g. 'Sora-ExtraBold') but KEPT the numeric fontWeight (800). On iOS each weight is a separate font family, so 'Sora-ExtraBold' + fontWeight 800 makes iOS look for a bolder face of that variant, fails, and silently falls back to system font. FIX: in applyNativePatch, strip fontWeight from the merged style so the family name alone carries the weight. Web path unchanged (CSS @font-face). Verified web has NO regression (heading computes 'Sora' weight 800, icons still 'ionicons', all tabs render). Native validation requires a real device/Expo Go."
+
 agent_communication:
     -agent: "main"
     -message: |
-      NEW: Please test ONLY the Services tab (frontend). Login via OTP: phone 9059721442, code 123456 (mock auth). Then tap the bottom 'Services' tab. Verify the 3-column service tiles render with a visible border line AND drop shadow (this was the reported bug — overflow:hidden was clipping the shadow on web; now fixed). Confirm 'Mark Attendance' (testID service-tile-attendance) navigates to /modules/attendance and 'Tickets' (testID service-tile-tickets) navigates to /modules/tickets. Upcoming tiles (Leaves/Visitors/Mess) should be dimmed and non-clickable. No backend changes. Earlier focus tasks below are stale — only test the Services tiles.
+      NEW (font): Fixed Sora not rendering on native iOS (Expo Go). Only src/font.ts changed — native patch now drops fontWeight when injecting the Sora variant (iOS family+weight conflict). Please run a FRONTEND WEB REGRESSION check only: login via OTP (phone 9059721442, code 123456), then confirm Home, Services, Alerts, Profile, Mess, and Mark Attendance all render correctly, text uses Sora, and ALL icons (bottom tabs, service tiles, etc.) still render as glyphs (NOT missing-glyph boxes / tofu). This guards against the shared font.ts change breaking web. NOTE: the actual iPhone Expo Go fix cannot be validated in browser automation — flag that for the user. No backend changes. Login via OTP: phone 9059721442, code 123456 (mock auth). Then tap the bottom 'Services' tab. Verify the 3-column service tiles render with a visible border line AND drop shadow (this was the reported bug — overflow:hidden was clipping the shadow on web; now fixed). Confirm 'Mark Attendance' (testID service-tile-attendance) navigates to /modules/attendance and 'Tickets' (testID service-tile-tickets) navigates to /modules/tickets. Upcoming tiles (Leaves/Visitors/Mess) should be dimmed and non-clickable. No backend changes. Earlier focus tasks below are stale — only test the Services tiles.
     -message_old: |
       Implemented branded Claymorphism showcase on Login, Home, and Attendance screens.
       Most important behavior change: Attendance now has ONE toggle button (green Check-In or
