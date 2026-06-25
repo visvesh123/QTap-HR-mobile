@@ -132,29 +132,28 @@ export default function Home() {
 
         {/* MU campus hero */}
         <View style={styles.muHeroWrap}>
-          <ImageBackground source={{ uri: CAMPUS_IMG }} style={styles.muHero} imageStyle={styles.muHeroRadius}>
-            <LinearGradient
-              colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.35)', 'rgba(20,23,28,0.86)']}
-              style={styles.muOverlay}
-            >
-              <View style={styles.muTopRow}>
-                <Text style={styles.muDate}>{dateStr}</Text>
-                {temp != null && (
-                  <View style={styles.tempChip}>
-                    <Text style={styles.tempEmoji}>{advisory.emoji}</Text>
-                    <Text style={styles.tempText}>{Math.round(temp)}°C</Text>
-                  </View>
-                )}
-              </View>
-              <View>
-                <Text style={styles.muGreet}>{greeting}, {firstName}</Text>
-                <View style={styles.muAdvisoryRow}>
-                  <Text style={styles.muAdvisoryEmoji}>{advisory.emoji}</Text>
-                  <Text style={styles.muAdvisory} numberOfLines={2}>{advisory.text}</Text>
+          <Image source={{ uri: CAMPUS_IMG }} style={styles.muHeroImg} resizeMode="cover" />
+          <LinearGradient
+            colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.35)', 'rgba(20,23,28,0.86)']}
+            style={styles.muOverlay}
+          >
+            <View style={styles.muTopRow}>
+              <Text style={styles.muDate}>{dateStr}</Text>
+              {temp != null && (
+                <View style={styles.tempChip}>
+                  <Text style={styles.tempEmoji}>{advisory.emoji}</Text>
+                  <Text style={styles.tempText}>{Math.round(temp)}°C</Text>
                 </View>
+              )}
+            </View>
+            <View>
+              <Text style={styles.muGreet}>{greeting}, {firstName}</Text>
+              <View style={styles.muAdvisoryRow}>
+                <Text style={styles.muAdvisoryEmoji}>{advisory.emoji}</Text>
+                <Text style={styles.muAdvisory} numberOfLines={2}>{advisory.text}</Text>
               </View>
-            </LinearGradient>
-          </ImageBackground>
+            </View>
+          </LinearGradient>
         </View>
 
         {/* Section heading */}
@@ -365,10 +364,9 @@ const styles = StyleSheet.create({
   avatarImg: { width: '100%', height: '100%' },
   avatarText: { color: C.white, fontSize: 18, fontWeight: '800' },
 
-  muHeroWrap: { marginTop: 4, marginBottom: 4 },
-  muHero: { width: '100%', aspectRatio: 1.7, justifyContent: 'flex-end' },
-  muHeroRadius: { borderRadius: 0 },
-  muOverlay: { flex: 1, paddingHorizontal: 20, paddingVertical: 18, justifyContent: 'space-between' },
+  muHeroWrap: { width: '100%', aspectRatio: 1.7, overflow: 'hidden', marginTop: 4, marginBottom: 4 },
+  muHeroImg: { position: 'absolute', top: 0, left: 0, right: 0, width: '100%', height: '160%' },
+  muOverlay: { ...StyleSheet.absoluteFillObject, paddingHorizontal: 20, paddingVertical: 18, justifyContent: 'space-between' },
   muTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   muDate: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.92)' },
   tempChip: {
