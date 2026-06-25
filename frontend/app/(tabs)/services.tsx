@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/auth';
 import { TAB_SERVICES } from '../../src/services-catalog';
 
-/* ───────────── Palette (matches Home screen) ───────────── */
+/* ───────────── Palette (matches Home) ───────────── */
 const C = {
   bg: '#FFFFFF',
   ink: '#15171C',
@@ -21,34 +21,17 @@ const C = {
   redDark: '#A8102F',
 };
 
-const CAPTION: Record<string, string> = {
-  attendance: 'Geo + face check-in',
-  tickets: 'Raise & track issues',
-  leave: 'Apply & track',
-  visitor: 'Invite guests',
-  mess: "Today's menu",
-};
-
-// Soft pastel tints per tile (Nixtio-style), neutral enough to match the palette.
-const TINT: Record<string, { bg: string; icon: string }> = {
-  attendance: { bg: C.red, icon: C.red },          // featured (filled crimson)
-  tickets: { bg: '#EFEAFB', icon: '#7C3AED' },
-  leave: { bg: '#E6EFFB', icon: '#2563EB' },
-  visitor: { bg: '#E6F4EA', icon: '#16A34A' },
-  mess: { bg: '#FFF3E0', icon: '#D97706' },
-};
-
 const UPCOMING = new Set(['leave', 'visitor', 'mess']);
 
-const GAP = 14;
+const GAP = 12;
 const H_PAD = 20;
 
 const SOFT = Platform.select({
-  web: { boxShadow: '0 4px 14px rgba(20,23,28,0.06)' } as any,
-  default: { shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 2 },
+  web: { boxShadow: '0 6px 18px rgba(20,23,28,0.07)' } as any,
+  default: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
 });
 
-function UpcomingBadge({ testID, dark }: { testID?: string; dark?: boolean }) {
+function UpcomingBadge({ testID }: { testID?: string }) {
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -60,12 +43,11 @@ function UpcomingBadge({ testID, dark }: { testID?: string; dark?: boolean }) {
     loop.start();
     return () => loop.stop();
   }, [pulse]);
-  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] });
-  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.74] });
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.1] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.7] });
   return (
     <Animated.View style={[styles.badge, { transform: [{ scale }], opacity }]} testID={testID}>
-      <MaterialCommunityIcons name="clock-outline" size={10} color={C.white} />
-      <Text style={styles.badgeText}>UPCOMING</Text>
+      <View style={styles.badgeDot} />
     </Animated.View>
   );
 }
@@ -73,40 +55,17 @@ function UpcomingBadge({ testID, dark }: { testID?: string; dark?: boolean }) {
 function ServiceTile({ s, tileW, onPress }: { s: any; tileW: number; onPress: () => void }) {
   const Icon = s.iconLib === 'mci' ? MaterialCommunityIcons : Ionicons;
   const upcoming = UPCOMING.has(s.key);
-  const tint = TINT[s.key] || { bg: C.field, icon: C.ink };
-  const featured = s.key === 'attendance';
-
   return (
     <TouchableOpacity
-      style={[
-        styles.tile,
-        { width: tileW, backgroundColor: tint.bg },
-        featured && styles.tileFeatured,
-        upcoming && styles.tileDim,
-      ]}
-      activeOpacity={upcoming ? 1 : 0.88}
+      style={[styles.tile, { width: tileW, height: tileW * 1.08 }, upcoming && styles.tileDim]}
+      activeOpacity={upcoming ? 1 : 0.85}
       disabled={upcoming}
       onPress={onPress}
       testID={`service-tile-${s.key}`}
     >
       {upcoming && <UpcomingBadge testID={`upcoming-badge-${s.key}`} />}
-
-      <View style={styles.iconChip}>
-        <Icon name={s.icon as any} size={24} color={upcoming ? C.muted : tint.icon} />
-      </View>
-
-      <View>
-        <Text style={[styles.tileLabel, featured && styles.tileLabelLight]} numberOfLines={1}>{s.label}</Text>
-        <Text style={[styles.tileCaption, featured && styles.tileCaptionLight]} numberOfLines={1}>
-          {upcoming ? 'Coming soon' : CAPTION[s.key]}
-        </Text>
-      </View>
-
-      {featured && (
-        <View style={styles.featArrow}>
-          <Ionicons name="arrow-forward" size={16} color={C.red} />
-        </View>
-      )}
+      <Icon name={s.icon as any} size={30} color={upcoming ? C.muted : C.red} />
+      <Text style={[styles.tileLabel, upcoming && { color: C.muted }]} numberOfLines={2}>{s.label}</Text>
     </TouchableOpacity>
   );
 }
@@ -117,11 +76,11 @@ export default function Services() {
   const { width } = useWindowDimensions();
   if (!user) return null;
 
-  const tileW = (Math.min(width, 720) - H_PAD * 2 - GAP) / 2;
-
   const firstName = user.role === 'admin'
     ? 'Admin'
     : user.name.replace(/^(Dr\.?|Mr\.?|Mrs\.?|Ms\.?|Prof\.?)\s+/i, '').split(' ')[0];
+
+  const tileW = (Math.min(width, 720) - H_PAD * 2 - GAP * 2) / 3;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -138,7 +97,7 @@ export default function Services() {
           <Text style={styles.searchText}>Search a service…</Text>
         </TouchableOpacity>
 
-        {/* Bento grid */}
+        {/* Minimalist 3-column grid */}
         <View style={styles.grid}>
           {TAB_SERVICES.map((s) => (
             <ServiceTile
@@ -175,40 +134,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: H_PAD, gap: GAP,
   },
   tile: {
-    height: 156, borderRadius: 26, padding: 18,
+    backgroundColor: C.white, borderRadius: 24, padding: 16,
     justifyContent: 'space-between', overflow: 'hidden',
     ...SOFT,
   },
-  tileFeatured: {
-    shadowColor: C.redDark,
-    ...Platform.select({
-      web: { boxShadow: '0 10px 26px rgba(168,16,47,0.28)' } as any,
-      default: { shadowOpacity: 0.3, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 6 },
-    }),
-  },
-  tileDim: { opacity: 0.6 },
-
-  iconChip: {
-    width: 48, height: 48, borderRadius: 24, backgroundColor: C.white,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  tileLabel: { fontSize: 17, fontWeight: '800', color: C.ink, letterSpacing: -0.3 },
-  tileLabelLight: { color: C.white },
-  tileCaption: { fontSize: 12.5, fontWeight: '500', color: C.inkSoft, marginTop: 2, opacity: 0.75 },
-  tileCaptionLight: { color: 'rgba(255,255,255,0.9)', opacity: 1 },
-
-  featArrow: {
-    position: 'absolute', right: 16, bottom: 16,
-    width: 40, height: 40, borderRadius: 20, backgroundColor: C.white,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  tileDim: { opacity: 0.55 },
+  tileLabel: { fontSize: 13.5, fontWeight: '700', color: C.ink, letterSpacing: -0.2 },
 
   badge: {
-    position: 'absolute', top: 14, right: 14, zIndex: 2,
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: C.red, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999,
+    position: 'absolute', top: 12, right: 12, zIndex: 2,
+    width: 16, height: 16, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center',
   },
-  badgeText: { fontSize: 9, fontWeight: '800', color: C.white, letterSpacing: 0.5 },
+  badgeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.red },
 
-  footnote: { fontSize: 13, color: C.muted, textAlign: 'center', marginTop: 26, paddingHorizontal: H_PAD },
+  footnote: { fontSize: 13, color: C.muted, textAlign: 'center', marginTop: 28, paddingHorizontal: H_PAD },
 });
