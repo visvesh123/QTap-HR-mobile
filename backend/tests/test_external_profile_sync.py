@@ -5,7 +5,7 @@ import requests
 
 BASE_URL = os.environ.get(
     'EXPO_PUBLIC_BACKEND_URL',
-    'https://uni-attendance-hub-2.preview.emergentagent.com'
+    'https://decoupled-frontend.preview.emergentagent.com'
 ).rstrip('/')
 
 
