@@ -27,8 +27,8 @@ const GAP = 12;
 const H_PAD = 20;
 
 const SOFT = Platform.select({
-  web: { boxShadow: '0 6px 18px rgba(20,23,28,0.07)' } as any,
-  default: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
+  web: { boxShadow: '0 2px 4px rgba(20,23,28,0.04), 0 8px 22px rgba(20,23,28,0.10)' } as any,
+  default: { shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.10, shadowRadius: 14, elevation: 4 },
 });
 
 function UpcomingBadge({ testID }: { testID?: string }) {
@@ -135,7 +135,8 @@ const styles = StyleSheet.create({
   },
   tile: {
     backgroundColor: C.white, borderRadius: 24, padding: 16,
-    justifyContent: 'space-between', overflow: 'hidden',
+    justifyContent: 'space-between',
+    borderWidth: 1, borderColor: '#EEEFF1',
     ...SOFT,
   },
   tileDim: { opacity: 0.55 },

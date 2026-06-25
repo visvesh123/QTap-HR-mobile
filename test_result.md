@@ -310,9 +310,24 @@ test_plan:
   test_all: false
   test_priority: "high_first"
 
+frontend:
+  - task: "Services screen minimalist 3-column tiles (shadow + border fix)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(tabs)/services.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Redesigned Services tab to a minimalist 3-column white-tile grid (crimson icons, label bottom-left), matching Home palette. USER BUG: tiles showed no shadow/border on web. ROOT CAUSE: tile had overflow:'hidden' which clipped the web box-shadow. FIX: removed overflow:'hidden', added borderWidth:1 borderColor #EEEFF1, and stronger SOFT shadow (web boxShadow dual-layer). Active tiles: service-tile-attendance, service-tile-tickets navigate on press. Upcoming (leave/visitor/mess) are dimmed (opacity 0.55), disabled, with a small pulsing red dot badge. Verify: (1) all 5 tiles render in a 3-col grid with visible border + drop shadow, (2) Mark Attendance tile -> /modules/attendance, (3) Tickets tile -> /modules/tickets, (4) upcoming tiles are non-clickable."
+
 agent_communication:
     -agent: "main"
     -message: |
+      NEW: Please test ONLY the Services tab (frontend). Login via OTP: phone 9059721442, code 123456 (mock auth). Then tap the bottom 'Services' tab. Verify the 3-column service tiles render with a visible border line AND drop shadow (this was the reported bug — overflow:hidden was clipping the shadow on web; now fixed). Confirm 'Mark Attendance' (testID service-tile-attendance) navigates to /modules/attendance and 'Tickets' (testID service-tile-tickets) navigates to /modules/tickets. Upcoming tiles (Leaves/Visitors/Mess) should be dimmed and non-clickable. No backend changes. Earlier focus tasks below are stale — only test the Services tiles.
+    -message_old: |
       Implemented branded Claymorphism showcase on Login, Home, and Attendance screens.
       Most important behavior change: Attendance now has ONE toggle button (green Check-In or
       crimson Check-Out) driven by lastEventToday derived from /api/attendance/history.
