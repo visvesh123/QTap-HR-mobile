@@ -205,7 +205,7 @@ function PropRow({ label, value, last }: { label: string; value: string; last?: 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   sectionTitle: { fontSize: 11, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase', color: colors.textSecondary, marginTop: spacing.md, marginBottom: spacing.sm },
-  card: { backgroundColor: colors.white, borderRadius: radii.lg, padding: spacing.md, ...shadow.card },
+  card: { backgroundColor: colors.white, borderRadius: 22, padding: spacing.md, ...shadow.card },
 
   tag: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
   tagText: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.3 },
@@ -248,10 +248,10 @@ const styles = StyleSheet.create({
   footer: { padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.white, gap: spacing.sm },
   lockedNote: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' },
   lockedText: { fontSize: 12, color: colors.textMuted },
-  reopenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, paddingVertical: 14, borderRadius: 999 },
+  reopenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, paddingVertical: 16, borderRadius: 16 },
   reopenText: { color: colors.white, fontSize: 15, fontWeight: '800' },
 
-  replyBar: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: spacing.sm, paddingHorizontal: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.white },
-  replyInput: { flex: 1, height: 44, backgroundColor: colors.steel50, borderRadius: 999, paddingHorizontal: 16, fontSize: 14, color: colors.text, borderWidth: 1, borderColor: colors.border },
-  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  replyBar: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: spacing.sm, paddingHorizontal: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.white },
+  replyInput: { flex: 1, height: 50, backgroundColor: '#F2F3F5', borderRadius: 16, paddingHorizontal: 16, fontSize: 15, color: colors.text },
+  sendBtn: { width: 50, height: 50, borderRadius: 16, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
 });
