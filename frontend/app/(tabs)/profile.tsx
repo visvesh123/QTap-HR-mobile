@@ -61,8 +61,8 @@ export default function Profile() {
 
   const Row = ({ r, testID }: { r: any; testID: string }) => (
     <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={r.onPress} testID={testID}>
-      <View style={[styles.rowIcon, { backgroundColor: r.bg }]}>
-        <Ionicons name={r.icon} size={22} color={r.color} />
+      <View style={[styles.rowIcon, { backgroundColor: '#FCE7EC' }]}>
+        <Ionicons name={r.icon} size={22} color={C.red} />
       </View>
       <Text style={styles.rowLabel}>{r.label}</Text>
       <View style={styles.chevBox}>
