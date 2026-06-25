@@ -6,8 +6,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../../src/api';
-import { colors, radii, spacing, typo, shadow } from '../../src/theme';
+import { colors, spacing } from '../../src/theme';
 import { Badge } from '../../src/ui';
+
+/* ───────────── Palette (matches Home / Services / Profile) ───────────── */
+const C = {
+  bg: '#FFFFFF', ink: '#15171C', inkSoft: '#3A3F47', muted: '#8A9099',
+  field: '#F2F3F5', white: '#FFFFFF', red: '#DC143C', redTint: '#FCE7EC',
+};
+const SOFT = Platform.select({
+  web: { boxShadow: '0 2px 4px rgba(20,23,28,0.04), 0 8px 22px rgba(20,23,28,0.10)' } as any,
+  default: { shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 14, elevation: 4 },
+});
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -81,8 +91,8 @@ function AccordionItem({ item, expanded, onToggle }: { item: Item; expanded: boo
         {item.image ? (
           <Image source={{ uri: item.image }} style={styles.thumb} resizeMode="cover" />
         ) : (
-          <View style={[styles.iconChip, { backgroundColor: `${meta.color}1A` }]}>
-            <Icon name={meta.icon} size={18} color={meta.color} />
+          <View style={styles.iconChip}>
+            <Icon name={meta.icon} size={20} color={C.red} />
           </View>
         )}
         <View style={styles.headTextWrap}>
@@ -94,7 +104,9 @@ function AccordionItem({ item, expanded, onToggle }: { item: Item; expanded: boo
             </Text>
           )}
         </View>
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />
+        <View style={styles.chevBox}>
+          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={C.inkSoft} />
+        </View>
       </TouchableOpacity>
 
       {expanded && (
@@ -107,7 +119,7 @@ function AccordionItem({ item, expanded, onToggle }: { item: Item; expanded: boo
             />
           )}
           <View style={styles.metaRow}>
-            <Badge label={item.type.toUpperCase()} color={meta.color} />
+            <Badge label={item.type.toUpperCase()} color={C.red} />
             {!!item.date && (
               <View style={styles.locRow}>
                 <Ionicons name="time-outline" size={13} color={colors.textMuted} />
@@ -180,32 +192,33 @@ export default function Alerts() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: spacing.md, paddingVertical: spacing.md },
-  title: { ...typo.h2, color: colors.text },
-  subtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  container: { flex: 1, backgroundColor: C.bg },
+  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
+  title: { fontSize: 28, fontWeight: '800', color: C.ink, letterSpacing: -0.6 },
+  subtitle: { fontSize: 14, color: C.muted, marginTop: 4, fontWeight: '500' },
 
   card: {
-    backgroundColor: colors.white,
-    borderRadius: radii.lg,
-    ...shadow.card,
-    overflow: 'hidden',
+    backgroundColor: C.white,
+    borderRadius: 22,
+    borderWidth: 1, borderColor: '#EEEFF1',
+    ...SOFT,
   },
-  cardExpanded: { ...shadow.cardHeavy },
+  cardExpanded: {},
   headRow: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-    paddingHorizontal: spacing.md, paddingVertical: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 16, paddingVertical: 14,
   },
-  iconChip: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  thumb: { width: 52, height: 52, borderRadius: 12, backgroundColor: '#FAF7F4' },
-  headTextWrap: { flex: 1, gap: 2 },
-  headTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
-  headSnippet: { fontSize: 12, color: colors.textMuted },
+  iconChip: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: C.redTint },
+  thumb: { width: 52, height: 52, borderRadius: 16, backgroundColor: C.field },
+  chevBox: { width: 44, height: 36, borderRadius: 12, backgroundColor: C.field, alignItems: 'center', justifyContent: 'center' },
+  headTextWrap: { flex: 1, gap: 3 },
+  headTitle: { fontSize: 15.5, fontWeight: '700', color: C.ink, letterSpacing: -0.2 },
+  headSnippet: { fontSize: 12.5, color: C.muted },
 
-  body: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
-  bodyImage: { width: '100%', height: 440, borderRadius: radii.md, marginBottom: spacing.sm, backgroundColor: '#FAF7F4' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: spacing.sm, flexWrap: 'wrap' },
+  body: { paddingHorizontal: 16, paddingBottom: 16 },
+  bodyImage: { width: '100%', height: 440, borderRadius: 16, marginBottom: 10, backgroundColor: C.field },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' },
   locRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  metaText: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
-  bodyText: { fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
+  metaText: { fontSize: 11.5, color: C.muted, fontWeight: '600' },
+  bodyText: { fontSize: 13.5, color: C.inkSoft, lineHeight: 21 },
 });
