@@ -365,10 +365,10 @@ const styles = StyleSheet.create({
   avatarImg: { width: '100%', height: '100%' },
   avatarText: { color: C.white, fontSize: 18, fontWeight: '800' },
 
-  muHeroWrap: { marginHorizontal: 20, marginBottom: 4 },
-  muHero: { width: '100%', aspectRatio: 1.55, justifyContent: 'flex-end' },
-  muHeroRadius: { borderRadius: 24 },
-  muOverlay: { flex: 1, borderRadius: 24, padding: 18, justifyContent: 'space-between' },
+  muHeroWrap: { marginTop: 4, marginBottom: 4 },
+  muHero: { width: '100%', aspectRatio: 1.7, justifyContent: 'flex-end' },
+  muHeroRadius: { borderRadius: 0 },
+  muOverlay: { flex: 1, paddingHorizontal: 20, paddingVertical: 18, justifyContent: 'space-between' },
   muTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   muDate: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.92)' },
   tempChip: {
