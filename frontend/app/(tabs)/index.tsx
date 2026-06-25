@@ -21,6 +21,10 @@ const C = {
   card: '#FFFFFF',
   line: '#ECEDEF',
   white: '#FFFFFF',
+  // Brand crimson accents
+  red: '#DC143C',
+  redDark: '#A8102F',
+  redSoft: '#FCEEF1',
 };
 
 const CAMPUS_IMG = 'https://customer-assets.emergentagent.com/job_6e34b5bc-d1ea-497f-9b38-6e61f8c9d982/artifacts/08bgdgj4_image.png';
@@ -248,7 +252,7 @@ function HeroCard({ image, tag, title, cta, onPress }: { image: string; tag: str
             <TouchableOpacity style={styles.seeMore} onPress={onPress} activeOpacity={0.9} testID="hero-cta">
               <Text style={styles.seeMoreText}>{cta}</Text>
               <View style={styles.seeMoreArrow}>
-                <Ionicons name="arrow-forward" size={16} color={C.ink} />
+                <Ionicons name="arrow-forward" size={16} color={C.red} />
               </View>
             </TouchableOpacity>
           </View>
@@ -283,7 +287,7 @@ const styles = StyleSheet.create({
   hello: { fontSize: 26, fontWeight: '800', color: C.ink, letterSpacing: -0.6 },
   welcome: { fontSize: 14, fontWeight: '500', color: C.muted, marginTop: 2 },
   avatar: {
-    width: 48, height: 48, borderRadius: 24, backgroundColor: C.ink,
+    width: 48, height: 48, borderRadius: 24, backgroundColor: C.red,
     alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
   },
   avatarImg: { width: '100%', height: '100%' },
@@ -296,7 +300,7 @@ const styles = StyleSheet.create({
   },
   searchPlaceholder: { fontSize: 15, color: C.muted, fontWeight: '500' },
   filterBtn: {
-    width: 54, height: 54, borderRadius: 16, backgroundColor: C.ink,
+    width: 54, height: 54, borderRadius: 16, backgroundColor: C.red,
     alignItems: 'center', justifyContent: 'center',
   },
 
@@ -307,7 +311,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18, height: 42, borderRadius: 21, backgroundColor: C.field,
     alignItems: 'center', justifyContent: 'center',
   },
-  pillActive: { backgroundColor: C.ink },
+  pillActive: { backgroundColor: C.red },
   pillText: { fontSize: 14, fontWeight: '700', color: C.inkSoft },
   pillTextActive: { color: C.white },
 
@@ -324,7 +328,7 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 28, fontWeight: '800', color: C.white, letterSpacing: -0.5, marginTop: 2, marginBottom: 14 },
   seeMore: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: 'rgba(20,23,28,0.78)', borderRadius: 30, paddingLeft: 22, paddingRight: 6, height: 56,
+    backgroundColor: C.red, borderRadius: 30, paddingLeft: 22, paddingRight: 6, height: 56,
   },
   seeMoreText: { fontSize: 16, fontWeight: '700', color: C.white },
   seeMoreArrow: {
@@ -336,7 +340,7 @@ const styles = StyleSheet.create({
   featCard: { width: 210, backgroundColor: C.card, borderRadius: 22, overflow: 'hidden', ...SOFT },
   featImg: { width: '100%', height: 120, backgroundColor: C.field },
   featBody: { padding: 14 },
-  featMeta: { fontSize: 11, fontWeight: '700', color: C.muted, letterSpacing: 0.4, textTransform: 'uppercase' },
+  featMeta: { fontSize: 11, fontWeight: '700', color: C.red, letterSpacing: 0.4, textTransform: 'uppercase' },
   featTitle: { fontSize: 16, fontWeight: '800', color: C.ink, marginTop: 4 },
   featSub: { fontSize: 12.5, fontWeight: '500', color: C.muted, marginTop: 2 },
 
@@ -358,5 +362,5 @@ const styles = StyleSheet.create({
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   ratingText: { fontSize: 14, fontWeight: '800', color: C.ink },
   ratingSub: { fontSize: 13, fontWeight: '500', color: C.muted },
-  goBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' },
+  goBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.red, alignItems: 'center', justifyContent: 'center' },
 });
