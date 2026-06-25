@@ -1,0 +1,30 @@
+{
+  "summary": "WEB REGRESSION guard PASSED for src/font.ts edit (native iOS fontWeight-stripping). On web (390x844) login via OTP (phone=9059721442, code=123456) lands on Home; MU hero banner image (08bgdgj4_image.png) renders; 'Explore campus' heading computes font-family 'Sora, system-ui, -apple-system, sans-serif' — Sora correctly applied. All 9 sampled icon nodes (Ionicons/MaterialCommunityIcons in bottom tabs, service tile, chevrons, advisory chip) render with PUA glyphs (codepoints 0xE000+: 62327, 61747, 62338, 62339, 983099, 62581, 62591, 62633, 62634) — NO tofu boxes. Services tab shows 3-column grid; tapping service-tile-mess opens /modules/mess which renders all 4 meal pills (breakfast/lunch/snacks/dinner) + mess-menu-card + 3 mess crowd cards. Alerts tab renders 3 accordion announcements. Profile tab renders avatar + 3 profile rows + 4 settings rows + Sign Out button. Mark Attendance via Home hero-cta (Staff role 'Check in now') renders action-in, action-out, 4 attendance-type chips and 3 tabs [today/history/stats]. No console errors. NO 'indexed property on CSSStyleDeclaration' messages. Only carry-over RN-Web deprecation warnings ('shadow*' and 'props.pointerEvents') — pre-existing, already documented in iteration_4. The web path was untouched by the font.ts edit (only the native Text.render branch changed); confirmed unchanged behaviour on web.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "RN-Web deprecation (carryover iter 1-4)", "issue": "Console warnings still present: \"shadow*\" style props are deprecated, use \"boxShadow\"; props.pointerEvents is deprecated, use style.pointerEvents. Reference: /app/frontend/src/theme.ts clay.* recipes. Not introduced by this iteration."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_5.json"],
+  "action_items": [
+    "[INFO] No fixes required. src/font.ts native patch update is web-safe — web path uses pure CSS @font-face and was not modified. The iOS fontWeight-strip fix can only be validated on a physical iOS device / native build (Expo Go), per task note.",
+    "[LOW / carryover] Replace shadow* props with boxShadow and move pointerEvents into style in /app/frontend/src/theme.ts to silence RN-Web deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "src/font.ts: web branch is unchanged (early-return Platform.OS==='web' → applyWebStylesheet()), so the iOS-specific fontWeight strip cannot impact web. Verified: 'Explore campus' computes 'Sora, system-ui, …' on web.",
+    "Icon protection logic is still correct: native patch returns early when flat.fontFamily is set (icon glyph fonts), and the web stylesheet uses :not([style*=\"font-family\"]) to exclude inline icon families. Result: all icons render as real glyphs.",
+    "On native, dropping fontWeight when injecting a Sora variant is the right call — each Sora weight (Sora-Bold, Sora-ExtraBold, …) is a separate iOS family; mixing fontWeight with a named family makes iOS attempt to bolden further and silently fall back to system. Cannot validate on web.",
+    "Style normalisation `{ ...rest, fontFamily }` produces a single object, avoiding the RN-Web nested-array style edge case mentioned in the comment — good defensive practice."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per task)", "frontend": "100% (all 8 web regression checks: login, home hero, Sora font, icons-no-tofu, services/mess, alerts, profile, attendance)"},
+  "seed_data_creation": "None (mock-mode app; auth fully mocked in /app/frontend/src/mock.ts).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "App is MOCK MODE (no backend calls). OTP login: any phone + code 123456. 9059721442 → Staff (Visvesh, Warden); Home hero CTA for staff = 'Check in now' → /modules/attendance. Bottom tab labels (Home/Services/Alerts/Profile) collide with Home category-pill labels ('Services'); use page.get_by_text('Services').last to target the bottom nav. Mess testIDs: meal-{breakfast,lunch,snacks,dinner}, mess-menu-card, mess-card-{id}, mess-back. Attendance testIDs: action-in, action-out, atttype-{Office|Work From Home|Client Visit|Field Ops}, tab-{today,history,stats}. Carry-over warnings (shadow*, pointerEvents) are noise — ignore unless asked to address.",
+  "rca_of_issue": "N/A — no regression. src/font.ts web branch unchanged; the iOS-only fontWeight-strip is on the native render-patch path and cannot affect the web preview."
+}
