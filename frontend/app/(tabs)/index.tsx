@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
-  ImageBackground, RefreshControl, TextInput, Platform,
+  ImageBackground, RefreshControl, Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/auth';
 import { api } from '../../src/api';
 import { spacing } from '../../src/theme';
+import { daysUntil } from '../../src/timeago';
 
 /* ───────────── Minimal monochrome palette (TripGlide-style) ───────────── */
 const C = {
@@ -51,10 +52,12 @@ export default function Home() {
   const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
+  const [holidays, setHolidays] = useState<any[]>([]);
   const [cat, setCat] = useState<Cat>('For You');
 
   const load = async () => {
     try { setEvents(await api.events()); } catch {}
+    try { const h = await api.holidays(); setHolidays((h.upcoming || []).slice(0, 3)); } catch {}
   };
   useEffect(() => { load(); }, [user]);
 
@@ -70,11 +73,11 @@ export default function Home() {
   const initials = (firstName?.[0] || 'U').toUpperCase();
 
   // Role-aware "For You" hero.
-  const roleHero = useMemo(() => {
+  const roleHero = (() => {
     if (user.role === 'student') return { kicker: 'Mid-Sem Exams', title: 'Hall Ticket', sub: 'Released · tap to view your card', cta: 'View hall ticket', route: '/modules/examinations' };
     if (user.role === 'admin') return { kicker: 'University', title: 'HR Portal', sub: 'Live attendance, staff & analytics', cta: 'Open portal', route: '/admin' };
     return { kicker: user.department || 'Faculty', title: 'Mark Attendance', sub: 'Geo + face check-in / check-out', cta: 'Check in now', route: '/modules/attendance' };
-  }, [user.role, user.department]);
+  })();
 
   const list = cat === 'For You' ? FEATURES : FEATURES.filter((f) => f.cat === cat);
   // For category tabs, the first item becomes the hero; rest fill the row.
@@ -228,6 +231,36 @@ export default function Home() {
             </ScrollView>
           </>
         )}
+
+        {/* Upcoming holidays */}
+        {holidays.length > 0 && (
+          <>
+            <Text style={styles.sectionH2Plain}>Upcoming holidays</Text>
+            <View style={styles.holidayWrap}>
+              {holidays.map((h) => {
+                const d = daysUntil(h.date);
+                const countdown = d <= 0 ? 'Today' : d === 1 ? 'Tomorrow' : `in ${d} days`;
+                const dt = new Date(`${h.date}T00:00:00`);
+                return (
+                  <View key={h.name} style={styles.holidayRow} testID={`holiday-${h.name}`}>
+                    <View style={styles.holidayDate}>
+                      <Text style={styles.holidayDay}>{dt.getDate()}</Text>
+                      <Text style={styles.holidayMon}>{dt.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.holidayName} numberOfLines={1}>{h.name}</Text>
+                      <Text style={styles.holidayType} numberOfLines={1}>{h.type}</Text>
+                    </View>
+                    <View style={styles.holidayPill}>
+                      <Ionicons name="time-outline" size={13} color={C.red} />
+                      <Text style={styles.holidayPillText}>{countdown}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -363,4 +396,25 @@ const styles = StyleSheet.create({
   ratingText: { fontSize: 14, fontWeight: '800', color: C.ink },
   ratingSub: { fontSize: 13, fontWeight: '500', color: C.muted },
   goBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.red, alignItems: 'center', justifyContent: 'center' },
+
+  sectionH2Plain: { fontSize: 22, fontWeight: '800', color: C.ink, letterSpacing: -0.4, paddingHorizontal: 20, marginTop: 30, marginBottom: 14 },
+  holidayWrap: { paddingHorizontal: 20, gap: 12 },
+  holidayRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: C.card, borderRadius: 18, padding: 14,
+    borderWidth: 1, borderColor: '#EEEFF1', ...SOFT,
+  },
+  holidayDate: {
+    width: 52, height: 52, borderRadius: 14, backgroundColor: '#FCE7EC',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  holidayDay: { fontSize: 20, fontWeight: '800', color: C.red, lineHeight: 22 },
+  holidayMon: { fontSize: 10, fontWeight: '800', color: C.red, letterSpacing: 1 },
+  holidayName: { fontSize: 16, fontWeight: '800', color: C.ink, letterSpacing: -0.2 },
+  holidayType: { fontSize: 12.5, fontWeight: '500', color: C.muted, marginTop: 2 },
+  holidayPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#FCE7EC', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999,
+  },
+  holidayPillText: { fontSize: 12, fontWeight: '800', color: C.red },
 });
