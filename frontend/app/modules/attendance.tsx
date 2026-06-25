@@ -1270,7 +1270,7 @@ function labelReason(r?: string) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.clayBg },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
   tabScroll: { flexGrow: 0, flexShrink: 0 },
   tabRow: {
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: 6,
@@ -1292,11 +1292,12 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 22, fontWeight: '800', color: colors.white, marginTop: 4 },
   heroLastPunch: { marginTop: 10, fontSize: 12, color: 'rgba(255,255,255,0.9)', fontWeight: '600' },
   clayBlock: {
-    backgroundColor: colors.claySurface,
-    borderRadius: radii.clay,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
     padding: spacing.md,
     marginTop: spacing.md,
-    ...(clay.surface as any),
+    borderWidth: 1, borderColor: '#EEEFF1',
+    ...shadow.card,
   },
   toggleWrap: {
     marginTop: spacing.md,
@@ -1329,20 +1330,20 @@ const styles = StyleSheet.create({
   timeDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.3)', alignSelf: 'stretch' },
   timeVal: { fontSize: 17, fontWeight: '800', color: colors.white },
   timeLab: { fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 2, letterSpacing: 0.8, fontWeight: '600' },
-  cardLabel: { fontSize: 10, fontWeight: '800', color: colors.clayMuted, letterSpacing: 1.4 },
+  cardLabel: { fontSize: 10, fontWeight: '800', color: '#8A9099', letterSpacing: 1.4 },
   typeRow: {
     flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12,
   },
   typeBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 10,
-    backgroundColor: colors.clayBgSoft,
+    backgroundColor: '#F2F3F5',
     borderRadius: radii.pill,
   },
   typeBtnActive: {
     backgroundColor: colors.primary,
   },
-  typeBtnText: { fontSize: 12, fontWeight: '700', color: colors.clayDark },
+  typeBtnText: { fontSize: 12, fontWeight: '700', color: '#3A3F47' },
   checkBtnWrap: { marginTop: spacing.md, borderRadius: radii.lg, overflow: 'hidden' },
   checkBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
