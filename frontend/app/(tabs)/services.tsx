@@ -21,7 +21,7 @@ const C = {
   redDark: '#A8102F',
 };
 
-const UPCOMING = new Set(['leave', 'visitor', 'mess']);
+const UPCOMING = new Set(['leave', 'visitor']);
 
 const GAP = 12;
 const H_PAD = 20;

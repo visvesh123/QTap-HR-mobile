@@ -96,14 +96,45 @@ const LEAVE_BALANCES = [
   { type: 'Earned', total: 18, used: 0, remaining: 18 },
 ];
 
+const MESS_MEALS = [
+  { key: 'breakfast', label: 'Breakfast', hours: '7:30 – 9:30 AM', icon: 'coffee-outline' },
+  { key: 'lunch', label: 'Lunch', hours: '12:30 – 2:30 PM', icon: 'food-variant' },
+  { key: 'snacks', label: 'Snacks', hours: '5:00 – 6:30 PM', icon: 'cookie-outline' },
+  { key: 'dinner', label: 'Dinner', hours: '7:30 – 9:30 PM', icon: 'food-turkey' },
+];
+
+// Shared menu across all three messes (today)
+const MESS_MENU: Record<string, string[]> = {
+  breakfast: ['Idli & Sambar', 'Mini Dosa', 'Boiled Eggs', 'Upma', 'Seasonal Fruits', 'Tea / Coffee'],
+  lunch: ['Veg Biryani', 'Dal Tadka', 'Aloo Gobi', 'Curd Rice', 'Salad', 'Gulab Jamun'],
+  snacks: ['Veg Puff', 'Samosa', 'Bhel Puri', 'Masala Chai'],
+  dinner: ['Roti', 'Paneer Butter Masala', 'Jeera Rice', 'Mixed Veg', 'Vanilla Ice Cream'],
+};
+
+// NOTE: occupancy_pct values are placeholders until the live occupancy API is wired.
 const MESS = {
-  meal: 'lunch', next_meal: 'snacks', server_time: nowIso(),
+  meals: MESS_MEALS,
+  menu: MESS_MENU,
   messes: [
-    { id: 'mess_it', name: 'IT Mess', location: 'Behind IT Block, Phase-1', capacity: 280, distance_m: 120, hours: { breakfast: '7:30 - 9:30 AM', lunch: '12:30 - 2:30 PM', snacks: '5:00 - 6:30 PM', dinner: '7:30 - 9:30 PM' }, menu: { breakfast: ['Idli & Sambar', 'Mini Dosa', 'Boiled Eggs', 'Upma', 'Tea / Coffee'], lunch: ['Veg Biryani', 'Dal Tadka', 'Aloo Gobi', 'Curd Rice', 'Salad', 'Gulab Jamun'], snacks: ['Veg Puff', 'Masala Chai', 'Bhel Puri'], dinner: ['Roti', 'Paneer Butter Masala', 'Jeera Rice', 'Mixed Veg', 'Ice Cream'] }, current: 153, occupancy_pct: 54.6, current_meal: 'lunch', next_meal: 'snacks', display_meal: 'lunch', today_menu: ['Veg Biryani', 'Dal Tadka', 'Aloo Gobi', 'Curd Rice', 'Salad', 'Gulab Jamun'], next_meal_hours: '5:00 - 6:30 PM', status: { label: 'Comfortable', color: '#22C55E', tone: 'good' }, wait_minutes: 0, updated_at: nowIso(), recommended: true },
-    { id: 'mess_dorms', name: 'Dorms Mess', location: 'Boys Hostel Complex, Block-C', capacity: 420, distance_m: 380, hours: { breakfast: '7:00 - 9:30 AM', lunch: '12:30 - 2:30 PM', snacks: '5:00 - 6:30 PM', dinner: '7:30 - 10:00 PM' }, menu: { breakfast: ['Aloo Paratha', 'Poha', 'Omelette', 'Cornflakes & Milk', 'Tea / Coffee'], lunch: ['Chicken Curry', 'Veg Pulao', 'Dal Makhani', 'Mixed Veg', 'Roti', 'Pickle'], snacks: ['Samosa', 'Vada Pav', 'Filter Coffee'], dinner: ['Butter Roti', 'Egg Curry', 'Steamed Rice', 'Bhindi Fry', 'Sweet Lassi'] }, current: 292, occupancy_pct: 69.5, current_meal: 'lunch', next_meal: 'snacks', display_meal: 'lunch', today_menu: ['Chicken Curry', 'Veg Pulao', 'Dal Makhani', 'Mixed Veg', 'Roti', 'Pickle'], next_meal_hours: '5:00 - 6:30 PM', status: { label: 'Crowded', color: '#F59E0B', tone: 'warn' }, wait_minutes: 2, updated_at: nowIso(), recommended: false },
-    { id: 'mess_phase2', name: 'Phase-2 Mess', location: 'Girls Hostel Complex, Phase-2', capacity: 320, distance_m: 540, hours: { breakfast: '7:30 - 9:30 AM', lunch: '12:30 - 2:30 PM', snacks: '5:00 - 6:30 PM', dinner: '7:30 - 9:30 PM' }, menu: { breakfast: ['Masala Dosa', 'Pongal', 'Boiled Eggs', 'Fruits', 'Tea / Coffee'], lunch: ['Hyderabadi Biryani', 'Dal Fry', 'Bhindi Masala', 'Raita', 'Salad', 'Kheer'], snacks: ['Pav Bhaji', 'Cold Coffee', 'Cookies'], dinner: ['Tandoori Roti', 'Veg Kofta', 'Steamed Rice', 'Aloo Methi', 'Gulab Jamun'] }, current: 193, occupancy_pct: 60.3, current_meal: 'lunch', next_meal: 'snacks', display_meal: 'lunch', today_menu: ['Hyderabadi Biryani', 'Dal Fry', 'Bhindi Masala', 'Raita', 'Salad', 'Kheer'], next_meal_hours: '5:00 - 6:30 PM', status: { label: 'Crowded', color: '#F59E0B', tone: 'warn' }, wait_minutes: 2, updated_at: nowIso(), recommended: false },
+    { id: 'mess_it', name: 'IT Mess', location: 'Behind IT Block, Phase-1', capacity: 280,
+      occupancy: { breakfast: 44, lunch: 56, snacks: 28, dinner: 47 } },
+    { id: 'mess_dorms', name: 'Dorms Mess', location: 'Boys Hostel Complex, Block-C', capacity: 420,
+      occupancy: { breakfast: 62, lunch: 86, snacks: 41, dinner: 71 } },
+    { id: 'mess_phase2', name: 'Phase-2 Mess', location: 'Girls Hostel Complex, Phase-2', capacity: 320,
+      occupancy: { breakfast: 51, lunch: 67, snacks: 35, dinner: 58 } },
   ],
 };
+
+// Derive the meal currently being served from local time (null = between meals).
+function messCurrentMeal(): string | null {
+  const d = new Date();
+  const h = d.getHours() + d.getMinutes() / 60;
+  if (h >= 7 && h < 9.75) return 'breakfast';
+  if (h >= 11.5 && h < 14.75) return 'lunch';
+  if (h >= 16.75 && h < 18.75) return 'snacks';
+  if (h >= 19.25 && h < 21.75) return 'dinner';
+  return null;
+}
 
 const EVENTS = [
   { id: 'evt1', title: 'TechFest 2026', category: 'Tech', date: '2026-03-15', venue: 'Main Auditorium', image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600', description: 'Annual technology festival with hackathons, workshops, and guest speakers from industry leaders.', organizer: 'Computer Science Club', registered: 247 },
@@ -400,7 +431,7 @@ export const mockApi = {
   adminMonthlyReport: async (_month?: string) => { await delay(); return { month: 'June 2026', rows: [] }; },
 
   // mess
-  messList: async (_demo?: string) => { await delay(); return { ...clone(MESS), server_time: nowIso() }; },
+  messList: async (_demo?: string) => { await delay(); return { ...clone(MESS), current_meal: messCurrentMeal(), server_time: nowIso() }; },
 
   // weather
   weather: async () => { await delay(); return clone(WEATHER); },
