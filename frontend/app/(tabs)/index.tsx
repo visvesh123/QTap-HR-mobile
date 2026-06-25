@@ -33,6 +33,22 @@ const CAMPUS_IMG = 'https://customer-assets.emergentagent.com/job_6e34b5bc-d1ea-
 const CATEGORIES = ['For You', 'Academics', 'Campus Life', 'Services'] as const;
 type Cat = (typeof CATEGORIES)[number];
 
+function weatherAdvisory(code: number | null, hour: number, temp: number | null): { emoji: string; text: string } {
+  const night = hour >= 19 || hour < 6;
+  if (code == null) return { emoji: '🎓', text: 'Welcome to campus — have a great day!' };
+  if ([95, 96, 99].includes(code)) return { emoji: '⛈️', text: 'Thunderstorms likely — stay indoors between classes.' };
+  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code))
+    return { emoji: '☔', text: 'Rain on campus — carry an umbrella to class.' };
+  if ([45, 48].includes(code)) return { emoji: '🌫️', text: 'Foggy out — allow extra time to reach campus.' };
+  if (temp != null && temp >= 38) return { emoji: '🥵', text: 'Scorching today — stay hydrated and keep to the shade.' };
+  if ([0, 1].includes(code))
+    return night
+      ? { emoji: '🌙', text: 'Clear skies tonight — perfect for a campus stroll.' }
+      : { emoji: '☀️', text: 'Clear skies — a great day out on the lawn.' };
+  if ([2, 3].includes(code)) return { emoji: '⛅', text: 'Cloud cover over campus — a comfortable day ahead.' };
+  return { emoji: '🌤️', text: 'Pleasant on campus today.' };
+}
+
 interface Feature {
   key: string; cat: Exclude<Cat, 'For You'>; title: string; sub: string;
   meta: string; image: string; route: string;
@@ -53,11 +69,13 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
   const [holidays, setHolidays] = useState<any[]>([]);
+  const [weather, setWeather] = useState<any>(null);
   const [cat, setCat] = useState<Cat>('For You');
 
   const load = async () => {
     try { setEvents(await api.events()); } catch {}
     try { const h = await api.holidays(); setHolidays((h.upcoming || []).slice(0, 3)); } catch {}
+    try { setWeather(await api.weather()); } catch {}
   };
   useEffect(() => { load(); }, [user]);
 
@@ -84,6 +102,14 @@ export default function Home() {
   const heroFeature = cat === 'For You' ? null : list[0];
   const rowFeatures = cat === 'For You' ? FEATURES : list.slice(1);
 
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const temp: number | null = weather?.temp_c ?? null;
+  const code: number | null = weather?.code ?? null;
+  const advisory = weatherAdvisory(code, hour, temp);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
@@ -91,11 +117,11 @@ export default function Home() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.ink} />}
       >
-        {/* Greeting header */}
+        {/* Brand header */}
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.hello}>Hello, {firstName}</Text>
-            <Text style={styles.welcome}>Welcome to MUOne</Text>
+            <Text style={styles.brand}>MU<Text style={styles.brandOne}>One</Text></Text>
+            <Text style={styles.welcome}>Mahindra University</Text>
           </View>
           <TouchableOpacity style={styles.avatar} onPress={() => router.push('/(tabs)/profile')} testID="home-avatar">
             {user.avatar
@@ -104,20 +130,31 @@ export default function Home() {
           </TouchableOpacity>
         </View>
 
-        {/* Search + filter */}
-        <View style={styles.searchRow}>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={styles.searchField}
-            onPress={() => router.push('/(tabs)/services')}
-            testID="home-search"
-          >
-            <Ionicons name="search" size={20} color={C.muted} />
-            <Text style={styles.searchPlaceholder}>Search services, events…</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.filterBtn} onPress={() => router.push('/(tabs)/services')} testID="home-filter">
-            <Ionicons name="options-outline" size={22} color={C.white} />
-          </TouchableOpacity>
+        {/* MU campus hero */}
+        <View style={styles.muHeroWrap}>
+          <ImageBackground source={{ uri: CAMPUS_IMG }} style={styles.muHero} imageStyle={styles.muHeroRadius}>
+            <LinearGradient
+              colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.35)', 'rgba(20,23,28,0.86)']}
+              style={styles.muOverlay}
+            >
+              <View style={styles.muTopRow}>
+                <Text style={styles.muDate}>{dateStr}</Text>
+                {temp != null && (
+                  <View style={styles.tempChip}>
+                    <Text style={styles.tempEmoji}>{advisory.emoji}</Text>
+                    <Text style={styles.tempText}>{Math.round(temp)}°C</Text>
+                  </View>
+                )}
+              </View>
+              <View>
+                <Text style={styles.muGreet}>{greeting}, {firstName}</Text>
+                <View style={styles.muAdvisoryRow}>
+                  <Text style={styles.muAdvisoryEmoji}>{advisory.emoji}</Text>
+                  <Text style={styles.muAdvisory} numberOfLines={2}>{advisory.text}</Text>
+                </View>
+              </View>
+            </LinearGradient>
+          </ImageBackground>
         </View>
 
         {/* Section heading */}
@@ -148,7 +185,7 @@ export default function Home() {
         {/* Hero card */}
         {cat === 'For You' ? (
           <HeroCard
-            image={CAMPUS_IMG}
+            image="https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=900"
             tag={roleHero.kicker}
             title={roleHero.title}
             cta={roleHero.cta}
@@ -318,6 +355,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16,
   },
   hello: { fontSize: 26, fontWeight: '800', color: C.ink, letterSpacing: -0.6 },
+  brand: { fontSize: 26, fontWeight: '900', color: C.ink, letterSpacing: -0.8 },
+  brandOne: { color: C.red, fontWeight: '900' },
   welcome: { fontSize: 14, fontWeight: '500', color: C.muted, marginTop: 2 },
   avatar: {
     width: 48, height: 48, borderRadius: 24, backgroundColor: C.red,
@@ -326,16 +365,22 @@ const styles = StyleSheet.create({
   avatarImg: { width: '100%', height: '100%' },
   avatarText: { color: C.white, fontSize: 18, fontWeight: '800' },
 
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20 },
-  searchField: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: C.field, borderRadius: 16, paddingHorizontal: 16, height: 54,
+  muHeroWrap: { marginHorizontal: 20, marginBottom: 4 },
+  muHero: { width: '100%', aspectRatio: 1.55, justifyContent: 'flex-end' },
+  muHeroRadius: { borderRadius: 24 },
+  muOverlay: { flex: 1, borderRadius: 24, padding: 18, justifyContent: 'space-between' },
+  muTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  muDate: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.92)' },
+  tempChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.22)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999,
   },
-  searchPlaceholder: { fontSize: 15, color: C.muted, fontWeight: '500' },
-  filterBtn: {
-    width: 54, height: 54, borderRadius: 16, backgroundColor: C.red,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  tempEmoji: { fontSize: 14 },
+  tempText: { fontSize: 14, fontWeight: '800', color: C.white },
+  muGreet: { fontSize: 25, fontWeight: '800', color: C.white, letterSpacing: -0.5 },
+  muAdvisoryRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginTop: 6 },
+  muAdvisoryEmoji: { fontSize: 15, lineHeight: 19 },
+  muAdvisory: { flex: 1, fontSize: 13.5, fontWeight: '500', color: 'rgba(255,255,255,0.92)', lineHeight: 19 },
 
   sectionH: { fontSize: 22, fontWeight: '800', color: C.ink, letterSpacing: -0.4, paddingHorizontal: 20, marginTop: 26, marginBottom: 14 },
 
