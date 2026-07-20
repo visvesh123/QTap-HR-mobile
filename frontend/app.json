@@ -13,7 +13,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Take selfie for attendance verification",
         "NSLocationWhenInUseUsageDescription": "Verify on-campus attendance"
-      }
+      },
+      "bundleIdentifier": "app.emergent.uniattendancehub2e69f033d"
     },
     "android": {
       "adaptiveIcon": {
@@ -25,7 +26,8 @@
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION"
-      ]
+      ],
+      "package": "app.emergent.uniattendancehub25ae7a292"
     },
     "web": {
       "bundler": "metro",
