@@ -9,8 +9,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/auth';
 import { api } from '../../src/api';
-import { spacing } from '../../src/theme';
+import { spacing, BRAND } from '../../src/theme';
 import { daysUntil } from '../../src/timeago';
+import { useCanAccess } from '../../src/components/PermissionGate';
+import { RBAC } from '../../src/services-catalog';
 
 /* ───────────── Minimal monochrome palette (TripGlide-style) ───────────── */
 const C = {
@@ -81,6 +83,11 @@ export default function Home() {
 
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
+  const canHallTicket = useCanAccess(RBAC.VIEW_HALL_TICKET);
+  const canAdminDash = useCanAccess(RBAC.VIEW_ADMIN_DASHBOARD);
+  const canCheckIn = useCanAccess(RBAC.CHECK_IN);
+  const canViewAttendance = useCanAccess(RBAC.VIEW_ATTENDANCE);
+
   if (!user) return null;
 
   const HONORIFICS = ['dr', 'dr.', 'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.', 'prof', 'prof.', 'mx', 'mx.'];
@@ -90,11 +97,39 @@ export default function Home() {
     : (HONORIFICS.includes((nameParts[0] || '').toLowerCase()) ? (nameParts[1] || nameParts[0]) : nameParts[0]);
   const initials = (firstName?.[0] || 'U').toUpperCase();
 
-  // Role-aware "For You" hero.
+  // Role-aware "For You" hero — only when the matching RBAC key is present.
   const roleHero = (() => {
-    if (user.role === 'student') return { kicker: 'Mid-Sem Exams', title: 'Hall Ticket', sub: 'Released · tap to view your card', cta: 'View hall ticket', route: '/modules/examinations' };
-    if (user.role === 'admin') return { kicker: 'University', title: 'HR Portal', sub: 'Live attendance, staff & analytics', cta: 'Open portal', route: '/admin' };
-    return { kicker: user.department || 'Faculty', title: 'Mark Attendance', sub: 'Geo + face check-in / check-out', cta: 'Check in now', route: '/modules/attendance' };
+    if (user.role === 'student' && canHallTicket) {
+      return {
+        kicker: 'Mid-Sem Exams',
+        title: 'Hall Ticket',
+        sub: 'Released · tap to view your card',
+        cta: 'View hall ticket',
+        route: '/modules/examinations',
+        image: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=900',
+      };
+    }
+    if (user.role === 'admin' && canAdminDash) {
+      return {
+        kicker: 'University',
+        title: 'HR Portal',
+        sub: 'Live attendance, staff & analytics',
+        cta: 'Open portal',
+        route: '/admin',
+        image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=900',
+      };
+    }
+    if (canCheckIn || canViewAttendance) {
+      return {
+        kicker: user.department || 'Faculty',
+        title: 'Mark Attendance',
+        sub: 'Geo + face check-in / check-out',
+        cta: 'Check in now',
+        route: '/modules/attendance',
+        image: require('../../assets/images/attendance-hero.png') as number,
+      };
+    }
+    return null;
   })();
 
   const list = cat === 'For You' ? FEATURES : FEATURES.filter((f) => f.cat === cat);
@@ -120,8 +155,12 @@ export default function Home() {
         {/* Brand header */}
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.brand}>MU<Text style={styles.brandOne}>One</Text></Text>
-            <Text style={styles.welcome}>Mahindra University</Text>
+            <Image
+              source={BRAND.logo}
+              style={styles.headerLogo}
+              resizeMode="contain"
+              accessibilityLabel="MUOne"
+            />
           </View>
           <TouchableOpacity style={styles.avatar} onPress={() => router.push('/(tabs)/profile')} testID="home-avatar">
             {user.avatar
@@ -182,15 +221,15 @@ export default function Home() {
         </ScrollView>
 
         {/* Hero card */}
-        {cat === 'For You' ? (
+        {cat === 'For You' && roleHero ? (
           <HeroCard
-            image="https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=900"
+            image={roleHero.image}
             tag={roleHero.kicker}
             title={roleHero.title}
             cta={roleHero.cta}
             onPress={() => router.push(roleHero.route as any)}
           />
-        ) : heroFeature ? (
+        ) : cat !== 'For You' && heroFeature ? (
           <HeroCard
             image={heroFeature.image}
             tag={heroFeature.meta}
@@ -302,11 +341,24 @@ export default function Home() {
   );
 }
 
-function HeroCard({ image, tag, title, cta, onPress }: { image: string; tag: string; title: string; cta: string; onPress: () => void }) {
+function HeroCard({
+  image,
+  tag,
+  title,
+  cta,
+  onPress,
+}: {
+  image: string | number;
+  tag: string;
+  title: string;
+  cta: string;
+  onPress: () => void;
+}) {
   const [liked, setLiked] = useState(false);
+  const source = typeof image === 'number' ? image : { uri: image };
   return (
     <View style={styles.hero}>
-      <ImageBackground source={{ uri: image }} style={styles.heroImg} imageStyle={styles.heroImgRadius}>
+      <ImageBackground source={source} style={styles.heroImg} imageStyle={styles.heroImgRadius}>
         <LinearGradient
           colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.1)', 'rgba(0,0,0,0.7)']}
           style={styles.heroOverlay}
@@ -353,6 +405,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16,
   },
+  headerLogo: { width: 148, height: 58, marginLeft: -4 },
   hello: { fontSize: 26, fontWeight: '800', color: C.ink, letterSpacing: -0.6 },
   brand: { fontSize: 26, fontWeight: '900', color: C.ink, letterSpacing: -0.8 },
   brandOne: { color: C.red, fontWeight: '900' },

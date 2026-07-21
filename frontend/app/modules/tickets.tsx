@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Alert,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,23 +9,9 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { api } from '../../src/api';
 import { colors, radii, spacing, shadow } from '../../src/theme';
 import { ScreenHeader, Empty } from '../../src/ui';
-
-/* ───────────── Palette (matches Services / Home) ───────────── */
-const C = {
-  bg: '#FFFFFF',
-  ink: '#15171C',
-  inkSoft: '#3A3F47',
-  muted: '#8A9099',
-  field: '#F2F3F5',
-  white: '#FFFFFF',
-  red: '#DC143C',
-  redDark: '#A8102F',
-  line: '#ECEDEF',
-};
-const SOFT = Platform.select({
-  web: { boxShadow: '0 4px 14px rgba(20,23,28,0.06)' } as any,
-  default: { shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 2 },
-});
+import { showAppAlert } from '../../src/components/AppAlert';
+import { PermissionGate, useCanAccess } from '../../src/components/PermissionGate';
+import { RBAC } from '../../src/services-catalog';
 
 export const STATUS_COLOR: Record<string, string> = {
   Open: '#3B82F6', 'In Progress': '#F59E0B', Resolved: '#16A34A', Closed: '#6E8493',
@@ -56,11 +42,28 @@ export function timeAgo(iso?: string) {
 
 export default function Tickets() {
   const router = useRouter();
-  const [tab, setTab] = useState<'raise' | 'my'>('raise');
+  const canCreate = useCanAccess(RBAC.CREATE_TICKET);
+  const canView = useCanAccess(RBAC.VIEW_TICKETS);
+  const [tab, setTab] = useState<'raise' | 'my'>(() => (canCreate ? 'raise' : 'my'));
+
+  useEffect(() => {
+    if (tab === 'raise' && !canCreate && canView) setTab('my');
+    if (tab === 'my' && !canView && canCreate) setTab('raise');
+  }, [canCreate, canView, tab]);
+
+  if (!canCreate && !canView) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScreenHeader title="Tickets" subtitle="Raise & track requests" onBack={() => router.back()} />
+        <Empty icon="ticket-outline" message="You don't have permission to use ticketing." />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader title="Tickets" subtitle="Raise & track requests" onBack={() => router.back()} />
+      {(canCreate && canView) && (
       <View style={styles.segment}>
         {(['raise', 'my'] as const).map((t) => (
           <TouchableOpacity
@@ -81,8 +84,17 @@ export default function Tickets() {
           </TouchableOpacity>
         ))}
       </View>
+      )}
 
-      {tab === 'raise' ? <RaiseForm onCreated={() => setTab('my')} /> : <MyTickets router={router} />}
+      {canCreate && (canView ? tab === 'raise' : true) ? (
+        <PermissionGate permission={RBAC.CREATE_TICKET}>
+          <RaiseForm onCreated={() => canView && setTab('my')} />
+        </PermissionGate>
+      ) : (
+        <PermissionGate permission={RBAC.VIEW_TICKETS}>
+          <MyTickets router={router} />
+        </PermissionGate>
+      )}
     </SafeAreaView>
   );
 }
@@ -90,32 +102,46 @@ export default function Tickets() {
 // ---------------- Raise a Ticket ----------------
 function RaiseForm({ onCreated }: { onCreated: () => void }) {
   const [profile, setProfile] = useState<any>(null);
-  const [dept, setDept] = useState('');
+  const [deptId, setDeptId] = useState('');
   const [deptOpen, setDeptOpen] = useState(false);
-  const [departments, setDepartments] = useState<string[]>([]);
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const selectedDept = departments.find((d) => d.id === deptId);
+
   useEffect(() => {
     (async () => {
       try { setProfile(await api.ticketLookup()); } catch {}
-      try { setDepartments(await api.ticketDepartments()); } catch {}
+      try {
+        const depts = await api.ticketDepartments();
+        const normalized = (depts || []).map((d: any) =>
+          typeof d === 'string' ? { id: d, name: d } : { id: String(d.id), name: d.name },
+        );
+        setDepartments(normalized);
+      } catch {}
     })();
   }, []);
 
   const create = async () => {
-    if (!dept) { Alert.alert('Department required', 'Please select a department.'); return; }
-    if (!subject.trim()) { Alert.alert('Subject required', 'Please enter a subject.'); return; }
-    if (!description.trim()) { Alert.alert('Description required', 'Please describe your issue.'); return; }
+    if (!deptId) { showAppAlert({ title: 'Department required', message: 'Please select a department.', variant: 'warning' }); return; }
+    if (!subject.trim()) { showAppAlert({ title: 'Subject required', message: 'Please enter a subject.', variant: 'warning' }); return; }
+    if (!description.trim()) { showAppAlert({ title: 'Description required', message: 'Please describe your issue.', variant: 'warning' }); return; }
     setSubmitting(true);
     try {
-      await api.createTicket({ subject: subject.trim(), description: description.trim(), department: dept, requester: profile });
-      setSubject(''); setDescription(''); setDept('');
-      Alert.alert('Ticket created', 'Your ticket has been raised successfully.');
+      await api.createTicket({
+        subject: subject.trim(),
+        description: description.trim(),
+        department: selectedDept?.name || deptId,
+        department_id: deptId,
+        requester: profile,
+      });
+      setSubject(''); setDescription(''); setDeptId('');
+      showAppAlert({ title: 'Ticket created', message: 'Your ticket has been raised successfully.', variant: 'success' });
       onCreated();
     } catch (e: any) {
-      Alert.alert('Could not create', e.message || 'Please try again.');
+      showAppAlert({ title: 'Could not create', message: e.message || 'Please try again.', variant: 'error' });
     } finally { setSubmitting(false); }
   };
 
@@ -152,8 +178,8 @@ function RaiseForm({ onCreated }: { onCreated: () => void }) {
         <Text style={styles.label}>Department</Text>
         <TouchableOpacity style={styles.input} onPress={() => setDeptOpen(true)} activeOpacity={0.8} testID="ticket-dept-select">
           <MaterialCommunityIcons name="office-building-outline" size={16} color={colors.textMuted} />
-          <Text style={[styles.inputText, { color: dept ? colors.text : colors.textMuted }]}>
-            {dept || 'Select department'}
+          <Text style={[styles.inputText, { color: selectedDept ? colors.text : colors.textMuted }]}>
+            {selectedDept?.name || 'Select department'}
           </Text>
           <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
         </TouchableOpacity>
@@ -201,7 +227,7 @@ function RaiseForm({ onCreated }: { onCreated: () => void }) {
 
         {/* Actions */}
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.cancelBtn} onPress={() => { setSubject(''); setDescription(''); setDept(''); }} activeOpacity={0.85} testID="ticket-cancel-btn">
+          <TouchableOpacity style={styles.cancelBtn} onPress={() => { setSubject(''); setDescription(''); setDeptId(''); }} activeOpacity={0.85} testID="ticket-cancel-btn">
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.createBtn, submitting && { opacity: 0.7 }]} onPress={create} disabled={submitting} activeOpacity={0.9} testID="ticket-create-btn">
@@ -223,14 +249,14 @@ function RaiseForm({ onCreated }: { onCreated: () => void }) {
             <ScrollView style={{ maxHeight: 340 }}>
               {departments.map((d) => (
                 <TouchableOpacity
-                  key={d}
+                  key={d.id}
                   style={styles.modalRow}
-                  onPress={() => { setDept(d); setDeptOpen(false); }}
+                  onPress={() => { setDeptId(d.id); setDeptOpen(false); }}
                   activeOpacity={0.7}
-                  testID={`dept-option-${d}`}
+                  testID={`dept-option-${d.name}`}
                 >
-                  <Text style={[styles.modalRowText, dept === d && { color: colors.primary, fontWeight: '800' }]}>{d}</Text>
-                  {dept === d && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+                  <Text style={[styles.modalRowText, deptId === d.id && { color: colors.primary, fontWeight: '800' }]}>{d.name}</Text>
+                  {deptId === d.id && <Ionicons name="checkmark" size={18} color={colors.primary} />}
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -351,89 +377,91 @@ function MyTickets({ router }: { router: any }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  segment: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: spacing.sm, paddingBottom: spacing.sm },
+  container: { flex: 1, backgroundColor: colors.background },
+  segment: { flexDirection: 'row', gap: 8, padding: spacing.md, paddingBottom: spacing.sm },
   segBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 13, borderRadius: 16, backgroundColor: C.field,
+    paddingVertical: 11, borderRadius: 999, backgroundColor: colors.steel50,
+    borderWidth: 1, borderColor: colors.border,
   },
-  segBtnActive: { backgroundColor: C.red },
-  segText: { fontSize: 13.5, fontWeight: '700', color: C.inkSoft },
+  segBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  segText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
 
-  label: { fontSize: 12.5, fontWeight: '700', color: C.inkSoft, marginBottom: 8, marginTop: spacing.md },
+  label: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, marginBottom: 6, marginTop: spacing.sm },
   input: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: C.field, borderRadius: 16,
-    paddingHorizontal: 14, height: 54, marginBottom: spacing.xs,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: colors.white, borderRadius: radii.md,
+    paddingHorizontal: 12, height: 48, marginBottom: spacing.xs,
+    borderWidth: 1, borderColor: colors.border,
   },
-  inputText: { flex: 1, fontSize: 15, color: C.ink },
+  inputText: { flex: 1, fontSize: 14, color: colors.text },
   lookupRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   lookupBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: C.red, paddingHorizontal: 16, height: 54, borderRadius: 16,
+    backgroundColor: colors.primary, paddingHorizontal: 16, height: 48, borderRadius: radii.md,
     justifyContent: 'center', minWidth: 100,
   },
-  lookupBtnText: { color: C.white, fontWeight: '800', fontSize: 13 },
+  lookupBtnText: { color: colors.white, fontWeight: '800', fontSize: 13 },
 
   profileCard: {
-    backgroundColor: C.field, borderRadius: 22, padding: spacing.md,
-    marginTop: spacing.sm,
+    backgroundColor: colors.clayMint, borderRadius: radii.lg, padding: spacing.md,
+    marginTop: spacing.sm, borderWidth: 1, borderColor: '#BFE6CB',
   },
-  profileHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: spacing.sm },
-  profileAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: C.red, alignItems: 'center', justifyContent: 'center' },
-  profileAvatarText: { color: C.white, fontWeight: '800', fontSize: 16 },
-  profileName: { fontSize: 16, fontWeight: '800', color: C.ink },
-  profileId: { fontSize: 12.5, color: C.muted, fontWeight: '600', marginTop: 1 },
+  profileHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: spacing.sm },
+  profileAvatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#16A34A', alignItems: 'center', justifyContent: 'center' },
+  profileAvatarText: { color: colors.white, fontWeight: '800', fontSize: 15 },
+  profileName: { fontSize: 15, fontWeight: '800', color: colors.steel900 },
+  profileId: { fontSize: 12, color: '#15803D', fontWeight: '700', marginTop: 1 },
   profileGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   pField: { width: '50%', marginBottom: 10 },
-  pFieldLabel: { fontSize: 10, fontWeight: '700', color: C.muted, letterSpacing: 0.4, textTransform: 'uppercase' },
-  pFieldValue: { fontSize: 13.5, fontWeight: '600', color: C.ink, marginTop: 2 },
+  pFieldLabel: { fontSize: 10, fontWeight: '700', color: '#15803D', letterSpacing: 0.4, textTransform: 'uppercase' },
+  pFieldValue: { fontSize: 13, fontWeight: '600', color: colors.steel800, marginTop: 2 },
 
   attachRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: spacing.md, opacity: 0.7 },
-  attachText: { fontSize: 13, fontWeight: '600', color: C.muted },
-  soonPill: { backgroundColor: C.muted, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
-  soonText: { fontSize: 8.5, fontWeight: '900', color: C.white, letterSpacing: 0.5 },
+  attachText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  soonPill: { backgroundColor: colors.textMuted, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  soonText: { fontSize: 8.5, fontWeight: '900', color: colors.white, letterSpacing: 0.5 },
 
-  note: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.field, borderRadius: 16, padding: 12, marginTop: spacing.md },
-  noteText: { flex: 1, fontSize: 12.5, color: C.inkSoft },
+  note: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EFF6FF', borderRadius: radii.md, padding: 10, marginTop: spacing.md },
+  noteText: { flex: 1, fontSize: 12, color: colors.steel700 },
 
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
-  cancelBtn: { flex: 1, paddingVertical: 16, borderRadius: 16, alignItems: 'center', backgroundColor: C.field },
-  cancelText: { fontSize: 15, fontWeight: '700', color: C.inkSoft },
-  createBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderRadius: 16, backgroundColor: C.red },
-  createText: { color: C.white, fontSize: 15, fontWeight: '800' },
+  cancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 999, alignItems: 'center', backgroundColor: colors.steel50, borderWidth: 1, borderColor: colors.border },
+  cancelText: { fontSize: 15, fontWeight: '700', color: colors.textSecondary },
+  createBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 999, backgroundColor: colors.primary },
+  createText: { color: colors.white, fontSize: 15, fontWeight: '800' },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(20,23,28,0.45)', justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: C.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: spacing.md, paddingBottom: spacing.xl },
-  modalTitle: { fontSize: 17, fontWeight: '800', color: C.ink, marginBottom: spacing.sm, paddingHorizontal: 4 },
-  modalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 15, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: C.line },
-  modalRowText: { fontSize: 15, color: C.ink },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(30,42,51,0.45)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.md, paddingBottom: spacing.xl },
+  modalTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: spacing.sm, paddingHorizontal: 4 },
+  modalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  modalRowText: { fontSize: 14, color: colors.text },
 
-  ticketCard: { backgroundColor: C.white, borderRadius: 22, padding: spacing.md, ...SOFT },
-  filterRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: spacing.xs },
+  ticketCard: { backgroundColor: colors.white, borderRadius: radii.lg, padding: spacing.md, ...shadow.card },
+  filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: spacing.md, paddingTop: spacing.xs },
   filterChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999,
-    backgroundColor: C.field,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
+    backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border,
   },
-  filterChipActive: { backgroundColor: C.red },
-  filterText: { fontSize: 13.5, fontWeight: '700', color: C.inkSoft },
-  filterCount: { minWidth: 20, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999, backgroundColor: '#E2E4E8', alignItems: 'center' },
-  filterCountActive: { backgroundColor: 'rgba(255,255,255,0.28)' },
-  filterCountText: { fontSize: 11, fontWeight: '800', color: C.inkSoft },
-  unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: C.red },
+  filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  filterText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
+  filterCount: { minWidth: 20, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999, backgroundColor: colors.steel100, alignItems: 'center' },
+  filterCountActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  filterCountText: { fontSize: 11, fontWeight: '800', color: colors.textSecondary },
+  unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
   ticketFootRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
   updatedWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   newBadge: {
-    fontSize: 9, fontWeight: '900', color: C.white, letterSpacing: 0.5,
-    backgroundColor: C.red, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden',
+    fontSize: 9, fontWeight: '900', color: colors.white, letterSpacing: 0.5,
+    backgroundColor: colors.primary, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden',
   },
   ticketTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  ticketNo: { fontSize: 13, fontWeight: '800', color: C.red, letterSpacing: 0.5 },
+  ticketNo: { fontSize: 13, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 },
   tag: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
   tagText: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.3 },
-  ticketSubject: { fontSize: 15.5, fontWeight: '700', color: C.ink, marginTop: 8 },
+  ticketSubject: { fontSize: 15, fontWeight: '700', color: colors.text, marginTop: 8 },
   journeyRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, flexWrap: 'wrap' },
-  journeyChip: { fontSize: 11, fontWeight: '700', color: C.inkSoft, backgroundColor: C.field, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' },
+  journeyChip: { fontSize: 11, fontWeight: '700', color: colors.steel600, backgroundColor: colors.steel50, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, overflow: 'hidden' },
   ticketDate: { fontSize: 11, color: colors.textMuted, marginTop: 8 },
 });

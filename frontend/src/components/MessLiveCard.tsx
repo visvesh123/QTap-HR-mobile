@@ -31,8 +31,36 @@ export default function MessLiveCard() {
     let mounted = true;
     const load = async () => {
       try {
-        const d = await api.messList();
-        if (mounted) setData(d);
+        const d: any = await api.messList();
+        if (!mounted) return;
+        // Support both legacy live-mess shape and the newer meals/menu/occupancy shape.
+        if (d?.meal != null && Array.isArray(d?.messes) && d.messes[0]?.occupancy_pct != null) {
+          setData(d);
+          return;
+        }
+        const meal = d?.current_meal || 'closed';
+        const messes = (d?.messes || []).map((m: any) => {
+          const pct = typeof m.occupancy?.[meal] === 'number' ? m.occupancy[meal] : 0;
+          return {
+            id: m.id,
+            name: m.name,
+            current: Math.round((pct / 100) * (m.capacity || 0)),
+            capacity: m.capacity || 0,
+            occupancy_pct: pct,
+            status: {
+              label: pct < 50 ? 'Low' : pct <= 80 ? 'Moderate' : 'Packed',
+              color: pct < 50 ? '#16A34A' : pct <= 80 ? '#F59E0B' : '#DC143C',
+            },
+            recommended: false,
+            current_meal: meal === 'closed' ? 'closed' : meal,
+            next_meal: meal,
+          } as Mess;
+        });
+        if (messes.length) {
+          const best = [...messes].sort((a, b) => a.occupancy_pct - b.occupancy_pct)[0];
+          if (best) best.recommended = true;
+        }
+        setData({ meal: meal || 'closed', messes });
       } catch {}
     };
     load();

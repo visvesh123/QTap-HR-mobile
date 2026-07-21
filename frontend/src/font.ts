@@ -1,5 +1,14 @@
 import { Text, TextInput, Platform, StyleSheet } from 'react-native';
-import { Asset } from 'expo-asset';
+
+// expo-asset is a transitive Expo dependency; keep a soft import for web font URIs.
+const Asset: { fromModule: (mod: number) => { uri: string } } = (() => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('expo-asset').Asset;
+  } catch {
+    return { fromModule: () => ({ uri: '' }) };
+  }
+})();
 
 const SORA_MAP: Record<string, string> = {
   '300': 'Sora-Regular',

@@ -7,7 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/auth';
-import { TAB_SERVICES } from '../../src/services-catalog';
+import { TAB_SERVICES, tabServicesForUser } from '../../src/services-catalog';
+import { ServicePermissionGate } from '../../src/components/PermissionGate';
 
 /* ───────────── Palette (matches Home) ───────────── */
 const C = {
@@ -81,6 +82,7 @@ export default function Services() {
     : user.name.replace(/^(Dr\.?|Mr\.?|Mrs\.?|Ms\.?|Prof\.?)\s+/i, '').split(' ')[0];
 
   const tileW = (Math.min(width, 720) - H_PAD * 2 - GAP * 2) / 3;
+  const enabledServices = tabServicesForUser(user.role, user.department, user.permissions ?? []);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -97,16 +99,20 @@ export default function Services() {
           <Text style={styles.searchText}>Search a service…</Text>
         </TouchableOpacity>
 
-        {/* Minimalist 3-column grid */}
+        {/* Minimalist 3-column grid — tile shown when user has ANY child RBAC permission */}
         <View style={styles.grid}>
           {TAB_SERVICES.map((s) => (
-            <ServiceTile
-              key={s.key}
-              s={s}
-              tileW={tileW}
-              onPress={() => { if (!UPCOMING.has(s.key)) router.push(s.route as any); }}
-            />
+            <ServicePermissionGate key={s.key} service={s}>
+              <ServiceTile
+                s={s}
+                tileW={tileW}
+                onPress={() => { if (!UPCOMING.has(s.key)) router.push(s.route as any); }}
+              />
+            </ServicePermissionGate>
           ))}
+          {enabledServices.length === 0 && (
+            <Text style={styles.emptyText}>No services are enabled for your account yet.</Text>
+          )}
         </View>
 
         <Text style={styles.footnote}>More services rolling out across Mahindra University soon.</Text>
@@ -149,5 +155,6 @@ const styles = StyleSheet.create({
   },
   badgeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.red },
 
+  emptyText: { width: '100%', textAlign: 'center', color: C.muted, fontSize: 13, paddingVertical: 16 },
   footnote: { fontSize: 13, color: C.muted, textAlign: 'center', marginTop: 28, paddingHorizontal: H_PAD },
 });

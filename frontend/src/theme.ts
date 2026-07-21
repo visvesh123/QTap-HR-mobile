@@ -207,12 +207,15 @@ export const clay = {
   }),
 };
 
-// Branding
+// Branding — MUOne lockup (logo + "Connected by One.")
 export const BRAND = {
-  name: 'Mahindra University',
+  name: 'MUOne',
   short: 'MU',
-  tagline: 'Rise. Lead. Inspire.',
+  tagline: 'Connected by One.',
   domain: 'mahindrauniversity.edu.in',
+  /** Full logo unit: MUone wordmark + caption */
+  logo: require('../assets/images/muone-logo.png') as number,
+  /** @deprecated Prefer BRAND.logo — kept for any remote/fallback consumers */
   logoUrl: 'https://customer-assets.emergentagent.com/job_campus-hub-453/artifacts/79azl2xu_mu_logo%20%281%29.png',
   poweredBy: 'Q-Tap',
   poweredByLogoUrl: 'https://customer-assets.emergentagent.com/job_campus-hub-453/artifacts/6viavqwc_Q-Tap_logo.jpg',

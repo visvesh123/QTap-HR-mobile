@@ -7,6 +7,7 @@ import { Text, View, ActivityIndicator } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { AuthProvider } from '../src/auth';
+import { AppAlertProvider } from '../src/components/AppAlert';
 import { applyGlobalFontPatch } from '../src/font';
 import { colors } from '../src/theme';
 
@@ -40,6 +41,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
+          <AppAlertProvider>
           <StatusBar style="dark" />
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
             <Stack.Screen name="index" />
@@ -48,6 +50,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="modules" />
           </Stack>
+          </AppAlertProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

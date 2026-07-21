@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
+  ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,37 +9,55 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { api } from '../../src/api';
 import { colors, radii, spacing, shadow } from '../../src/theme';
 import { ScreenHeader } from '../../src/ui';
+import { showAppAlert } from '../../src/components/AppAlert';
 import { STATUS_COLOR, PRIORITY_COLOR, fmtDateTime } from './tickets';
+
+const CONVERSATION_POLL_MS = 10_000;
 
 export default function TicketDetail() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const ticketId = String(Array.isArray(id) ? id[0] : id || '').trim();
   const [ticket, setTicket] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [reply, setReply] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    try { setTicket(await api.ticketDetail(String(id))); } catch {}
-    setLoading(false);
-  }, [id]);
+  const load = useCallback(async (silent = false) => {
+    if (!ticketId) {
+      setTicket(null);
+      setLoading(false);
+      return;
+    }
+    if (!silent) setLoading(true);
+    try {
+      const detail = await api.ticketDetail(ticketId);
+      if (detail) setTicket(detail);
+    } catch {}
+    if (!silent) setLoading(false);
+  }, [ticketId]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    if (!ticketId) return;
+    load(false);
+    const poll = setInterval(() => load(true), CONVERSATION_POLL_MS);
+    return () => clearInterval(poll);
+  }, [ticketId, load]));
 
   const isClosed = ticket?.status === 'Closed';
 
   const send = async () => {
     if (!reply.trim()) return;
     setBusy(true);
-    try { await api.addTicketComment(ticket.id, reply.trim()); setReply(''); await load(); }
-    catch (e: any) { Alert.alert('Could not send', e.message || 'Try again.'); }
+    try { await api.addTicketComment(ticket.id, reply.trim()); setReply(''); await load(true); }
+    catch (e: any) { showAppAlert({ title: 'Could not send', message: e.message || 'Try again.', variant: 'error' }); }
     finally { setBusy(false); }
   };
 
   const reopen = async () => {
     setBusy(true);
-    try { await api.reopenTicket(ticket.id); await load(); Alert.alert('Reopened', 'This ticket has been reopened.'); }
-    catch (e: any) { Alert.alert('Could not reopen', e.message || 'Try again.'); }
+    try { await api.reopenTicket(ticket.id); await load(true); showAppAlert({ title: 'Reopened', message: 'This ticket has been reopened.', variant: 'success' }); }
+    catch (e: any) { showAppAlert({ title: 'Could not reopen', message: e.message || 'Try again.', variant: 'error' }); }
     finally { setBusy(false); }
   };
 
@@ -205,7 +223,7 @@ function PropRow({ label, value, last }: { label: string; value: string; last?: 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   sectionTitle: { fontSize: 11, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase', color: colors.textSecondary, marginTop: spacing.md, marginBottom: spacing.sm },
-  card: { backgroundColor: colors.white, borderRadius: 22, padding: spacing.md, ...shadow.card },
+  card: { backgroundColor: colors.white, borderRadius: radii.lg, padding: spacing.md, ...shadow.card },
 
   tag: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
   tagText: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.3 },
@@ -248,10 +266,10 @@ const styles = StyleSheet.create({
   footer: { padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.white, gap: spacing.sm },
   lockedNote: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' },
   lockedText: { fontSize: 12, color: colors.textMuted },
-  reopenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, paddingVertical: 16, borderRadius: 16 },
+  reopenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, paddingVertical: 14, borderRadius: 999 },
   reopenText: { color: colors.white, fontSize: 15, fontWeight: '800' },
 
-  replyBar: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: spacing.sm, paddingHorizontal: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.white },
-  replyInput: { flex: 1, height: 50, backgroundColor: '#F2F3F5', borderRadius: 16, paddingHorizontal: 16, fontSize: 15, color: colors.text },
-  sendBtn: { width: 50, height: 50, borderRadius: 16, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  replyBar: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: spacing.sm, paddingHorizontal: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.white },
+  replyInput: { flex: 1, height: 44, backgroundColor: colors.steel50, borderRadius: 999, paddingHorizontal: 16, fontSize: 14, color: colors.text, borderWidth: 1, borderColor: colors.border },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
 });

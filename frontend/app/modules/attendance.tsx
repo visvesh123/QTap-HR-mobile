@@ -9,11 +9,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { api, dalmartGeoValidate, dalmartFaceValidate } from '../../src/api';
+import { api, resolveAttendanceAction } from '../../src/api';
 import { useAuth } from '../../src/auth';
 import { colors, radii, shadow, spacing, clay } from '../../src/theme';
 import { Card, Pill, Badge, ScreenHeader, Empty } from '../../src/ui';
 import { ProgressRing, TodayTimeline } from '../../src/components/AttendanceVisuals';
+import { showAppAlert } from '../../src/components/AppAlert';
+import { PermissionGate } from '../../src/components/PermissionGate';
+import { RBAC, hasPermission } from '../../src/services-catalog';
 
 type AttType = 'office' | 'wfh' | 'client_visit' | 'field';
 const TYPE_META: Record<AttType, { label: string; icon: string }> = {
@@ -62,11 +65,14 @@ export default function StaffAttendanceScreen() {
   const [stats, setStats] = useState<any>(null);
   const [team, setTeam] = useState<any>(null);
   const [geofences, setGeofences] = useState<any[]>([]);
+  const [authorizedLocations, setAuthorizedLocations] = useState<any[]>([]);
   const [attType, setAttType] = useState<AttType>('office');
   const [demoMode, setDemoMode] = useState(false);
   const [demoInsideFence, setDemoInsideFence] = useState(true);
   const [showCapture, setShowCapture] = useState(false);
   const [captureKind, setCaptureKind] = useState<'in' | 'out'>('in');
+  const [captureSkipGeo, setCaptureSkipGeo] = useState(false);
+  const [checkingAction, setCheckingAction] = useState(false);
 
   // ---- Dalmart-driven "today", persisted via FastAPI (Mongo). ----
   type DToday = {
@@ -104,17 +110,39 @@ export default function StaffAttendanceScreen() {
     }).catch(() => {});
   }, []);
 
+  const syncTodayFromStatus = useCallback((status: any) => {
+    if (!status) return;
+    const state = status.current_state;
+    if (state === 'CHECKED_IN' || state === 'PENDING_FACE') {
+      setDalmartToday({
+        checkInAt: status.face_recognition_marked_at || status.geo_marked_at || undefined,
+        checkOutAt: undefined,
+      });
+    } else if (state === 'CHECKED_OUT') {
+      setDalmartToday({
+        checkInAt: status.geo_marked_at || undefined,
+        checkOutAt: status.face_recognition_marked_at || undefined,
+      });
+    } else if (state === 'NO_RECORD' || state === 'EXPIRED') {
+      setDalmartToday(null);
+    }
+  }, []);
+
   // Loads History / Stats / Geofences AND today's timeline (persisted in FastAPI/Mongo).
   const reload = useCallback(async () => {
     try {
-      const [h, s, g, today] = await Promise.all([
+      const [h, s, g, today, locations, status] = await Promise.all([
         api.attendanceHistory().catch(() => []),
         api.attendanceStats().catch(() => null),
         api.attendanceGeofences().catch(() => []),
         api.timelineToday().catch(() => null),
+        api.authorizedLocations().catch(() => []),
+        api.attendanceStatus().catch(() => null),
       ]);
-      setHistory(h); setStats(s); setGeofences(g);
-      if (today) {
+      setHistory(h); setStats(s); setGeofences(g); setAuthorizedLocations(locations);
+      if (status) {
+        syncTodayFromStatus(status);
+      } else if (today) {
         setDalmartToday({
           checkInAt: today.check_in_at || undefined,
           checkOutAt: today.check_out_at || undefined,
@@ -126,23 +154,53 @@ export default function StaffAttendanceScreen() {
         setTeam(tm);
       }
     } catch {}
-  }, [isAdmin]);
+  }, [isAdmin, syncTodayFromStatus]);
 
   useEffect(() => { reload(); }, [reload]);
 
-  const onCheckPress = (kind: 'in' | 'out') => {
-    setCaptureKind(kind);
-    setShowCapture(true);
+  const onCheckPress = async (kind: 'in' | 'out') => {
+    if (checkingAction) return;
+    setCheckingAction(true);
+    try {
+      const status = await api.attendanceStatus();
+      const decision = resolveAttendanceAction(status, kind);
+      if (!decision.allowed) {
+        showAppAlert({
+          title: 'Not allowed',
+          message: 'message' in decision ? decision.message : 'This action is not allowed.',
+          variant: 'warning',
+        });
+        return;
+      }
+      setCaptureKind(kind);
+      setCaptureSkipGeo(!!decision.skipGeo);
+      setShowCapture(true);
+    } catch (e: any) {
+      showAppAlert({
+        title: 'Something went wrong',
+        message: e?.message || 'Could not verify attendance status.',
+        variant: 'error',
+      });
+    } finally {
+      setCheckingAction(false);
+    }
   };
 
   const tabs = useMemo(
-    () => ([
-      { id: 'today',   label: 'Today',   icon: 'today-outline' },
-      { id: 'history', label: 'History', icon: 'time-outline' },
-      { id: 'stats',   label: 'Stats',   icon: 'stats-chart-outline' },
-      ...(isAdmin ? [{ id: 'team', label: 'Team', icon: 'people-outline' }] : []),
-    ]),
-    [isAdmin],
+    () => {
+      const granted = user?.permissions ?? [];
+      const canView = hasPermission(granted, RBAC.VIEW_ATTENDANCE);
+      const base = [
+        { id: 'today',   label: 'Today',   icon: 'today-outline' },
+        ...(canView ? [
+          { id: 'history', label: 'History', icon: 'time-outline' },
+          { id: 'stats',   label: 'Stats',   icon: 'stats-chart-outline' },
+        ] : []),
+        ...(isAdmin ? [{ id: 'team', label: 'Team', icon: 'people-outline' }] : []),
+      ];
+      return base;
+    },
+    [isAdmin, user?.permissions],
   );
 
   return (
@@ -176,8 +234,9 @@ export default function StaffAttendanceScreen() {
             attType={attType}
             setAttType={setAttType}
             geofences={geofences}
-            designatedLocations={user?.designated_locations || []}
+            authorizedLocations={authorizedLocations}
             onCheck={onCheckPress}
+            checkingAction={checkingAction}
           />
         )}
         {tab === 'history' && <HistoryTab items={history} />}
@@ -188,13 +247,14 @@ export default function StaffAttendanceScreen() {
       {showCapture && (
         <CaptureFlow
           kind={captureKind}
+          skipGeo={captureSkipGeo}
           attType={attType}
           qid={user?.qid}
           demoMode={demoMode}
           demoInsideFence={demoInsideFence}
           onSuccess={applyDalmartPunch}
-          onDone={() => { setShowCapture(false); reload(); }}
-          onClose={() => setShowCapture(false)}
+          onDone={() => { setShowCapture(false); setCaptureSkipGeo(false); reload(); }}
+          onClose={() => { setShowCapture(false); setCaptureSkipGeo(false); }}
         />
       )}
     </SafeAreaView>
@@ -203,57 +263,64 @@ export default function StaffAttendanceScreen() {
 
 // ---------- TODAY ----------
 const TodayTab = ({
-  checkInAt, checkOutAt, attType, setAttType, geofences, designatedLocations, onCheck,
+  checkInAt, checkOutAt, attType, setAttType, geofences, authorizedLocations, onCheck, checkingAction,
 }: any) => {
   return (
     <View>
       {/* Check In */}
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={() => onCheck('in')}
-        testID="action-in"
-        style={[styles.toggleWrap, clay.crimson as any, { marginTop: 0 }]}
-      >
-        <LinearGradient
-          colors={['#22C55E', '#16A34A', '#15803D']}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={styles.toggleBtn}
+      <PermissionGate permission={RBAC.CHECK_IN}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => onCheck('in')}
+          disabled={checkingAction}
+          testID="action-in"
+          style={[styles.toggleWrap, clay.crimson as any, { marginTop: 0 }]}
         >
-          <View style={[styles.toggleIconWrap, clay.surfaceSoft as any]}>
-            <MaterialCommunityIcons name="login-variant" size={30} color={colors.white} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.toggleTitle}>Check In</Text>
-            <Text style={styles.toggleSub}>Mark your arrival</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.85)" />
-        </LinearGradient>
-      </TouchableOpacity>
+          <LinearGradient
+            colors={['#22C55E', '#16A34A', '#15803D']}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={styles.toggleBtn}
+          >
+            <View style={[styles.toggleIconWrap, clay.surfaceSoft as any]}>
+              <MaterialCommunityIcons name="login-variant" size={30} color={colors.white} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.toggleTitle}>Check In</Text>
+              <Text style={styles.toggleSub}>Mark your arrival</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.85)" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </PermissionGate>
 
       {/* Check Out — directly under Check In */}
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={() => onCheck('out')}
-        testID="action-out"
-        style={[styles.toggleWrap, clay.crimson as any, { marginTop: spacing.sm }]}
-      >
-        <LinearGradient
-          colors={[colors.primaryLight, colors.primary, colors.primaryDark]}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={styles.toggleBtn}
+      <PermissionGate permission={RBAC.CHECK_OUT}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => onCheck('out')}
+          disabled={checkingAction}
+          testID="action-out"
+          style={[styles.toggleWrap, clay.crimson as any, { marginTop: spacing.sm }]}
         >
-          <View style={[styles.toggleIconWrap, clay.surfaceSoft as any]}>
-            <MaterialCommunityIcons name="logout-variant" size={30} color={colors.white} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.toggleTitle}>Check Out</Text>
-            <Text style={styles.toggleSub}>Mark your departure</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.85)" />
-        </LinearGradient>
-      </TouchableOpacity>
+          <LinearGradient
+            colors={[colors.primaryLight, colors.primary, colors.primaryDark]}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={styles.toggleBtn}
+          >
+            <View style={[styles.toggleIconWrap, clay.surfaceSoft as any]}>
+              <MaterialCommunityIcons name="logout-variant" size={30} color={colors.white} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.toggleTitle}>Check Out</Text>
+              <Text style={styles.toggleSub}>Mark your departure</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.85)" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </PermissionGate>
 
       {/* Today's Timeline */}
+      <PermissionGate permission={RBAC.VIEW_ATTENDANCE_TIMELINE}>
       <View style={[styles.clayBlock]}>
         <Text style={styles.cardLabel}>TODAY&apos;S TIMELINE</Text>
         <TodayTimeline
@@ -262,8 +329,9 @@ const TodayTab = ({
           workSeconds={(checkInAt && checkOutAt) ? Math.max(0, (new Date(checkOutAt).getTime() - new Date(checkInAt).getTime()) / 1000) : undefined}
         />
       </View>
+      </PermissionGate>
 
-      {/* Attendance type selector — always visible */}
+      {/* Attendance type selector — hidden for now
       <View style={[styles.clayBlock, { marginTop: spacing.md }]}>
         <Text style={styles.cardLabel}>ATTENDANCE TYPE</Text>
         <View style={styles.typeRow}>
@@ -285,13 +353,15 @@ const TodayTab = ({
           })}
         </View>
       </View>
+      */}
 
       {/* Authorized / designated locations */}
+      <PermissionGate permission={RBAC.VIEW_ATTENDANCE_LOCATIONS}>
       <View style={[styles.clayBlock, { marginTop: spacing.md }]}>
         <Text style={styles.cardLabel}>AUTHORIZED LOCATIONS</Text>
         {(() => {
           const fmtRadius = (r: number) => (r >= 1000 ? `${+(r / 1000).toFixed(r % 1000 ? 1 : 0)} km` : `${r} m`);
-          const locs = (designatedLocations || []).map((loc: any, i: number) => ({
+          const locs = (authorizedLocations || []).map((loc: any, i: number) => ({
             id: loc.venue_id ?? `dl-${i}`,
             name: loc.venue_name || `Location ${i + 1}`,
             address: (loc.latitude != null && loc.longitude != null)
@@ -316,6 +386,7 @@ const TodayTab = ({
           ));
         })()}
       </View>
+      </PermissionGate>
     </View>
   );
 };
@@ -654,9 +725,10 @@ type CaptureStep = 'permissions' | 'location' | 'camera' | 'verifying' | 'result
 type DemoOutcome = 'success' | 'low_confidence' | 'spoof';
 
 const CaptureFlow = ({
-  kind, attType, qid, demoMode, demoInsideFence, onSuccess, onDone, onClose,
+  kind, skipGeo, attType, qid, demoMode, demoInsideFence, onSuccess, onDone, onClose,
 }: {
   kind: 'in' | 'out';
+  skipGeo?: boolean;
   attType: AttType;
   qid?: string;
   demoMode: boolean;
@@ -665,6 +737,11 @@ const CaptureFlow = ({
   onDone: () => void;
   onClose: () => void;
 }) => {
+  const { user } = useAuth();
+  const granted = user?.permissions ?? [];
+  const markPermission = kind === 'in' ? RBAC.CHECK_IN : RBAC.CHECK_OUT;
+  const canGeo = hasPermission(granted, RBAC.GEO_VALIDATE) || hasPermission(granted, markPermission);
+  const canFace = hasPermission(granted, RBAC.FACE_VALIDATE) || hasPermission(granted, markPermission);
   const [step, setStep] = useState<CaptureStep>('permissions');
   const [permission, requestPermission] = useCameraPermissions();
   const [selfieUri, setSelfieUri] = useState<string | null>(null);
@@ -689,14 +766,24 @@ const CaptureFlow = ({
         }
       }
       started.current = true;
+      if (skipGeo) {
+        setGeoState('valid');
+        setStep('camera');
+        return;
+      }
       setStep('location');
       fetchLocation();
     })();
-  }, [permission]);
+  }, [permission, skipGeo]);
 
   const fetchLocation = async () => {
     setGeoState('fetching');
     setGeoError('');
+    if (!canGeo) {
+      setGeoError('You do not have permission to validate location.');
+      setGeoState('invalid');
+      return;
+    }
     let lat = MU_LAT, lon = MU_LON, accuracy = 8, mock = false;
     if (Platform.OS !== 'web') {
       try {
@@ -722,7 +809,7 @@ const CaptureFlow = ({
       return;
     }
     try {
-      const json = await dalmartGeoValidate(qid, lat, lon, kind === 'in' ? 'IN' : 'OUT');
+      const json = await api.attendanceValidateLocation(lat, lon, kind === 'in' ? 'IN' : 'OUT', qid);
       const inner = json?.data || {};
       const geoOk =
         inner?.attendance?.geo_validation === true || inner?.status?.geo_validation === true;
@@ -735,6 +822,11 @@ const CaptureFlow = ({
       if ((json?.success && geoOk) || pendingFace) {
         setVenueName(inner?.venue?.venue_name || null);
         setGeoState('valid');
+        if (!canFace) {
+          setGeoError('You do not have permission for face verification.');
+          setGeoState('invalid');
+          return;
+        }
         setTimeout(() => setStep('camera'), 1100);
       } else {
         setGeoError(json?.message || 'You are not within an authorized location.');
@@ -766,7 +858,7 @@ const CaptureFlow = ({
         return;
       }
       // Step 2: face recognition — call the dalmart service DIRECTLY (multipart).
-      const fr = await dalmartFaceValidate(qid, { base64: b64, uri });
+      const fr = await api.attendanceValidateFace({ base64: b64, uri }, qid);
       const root = fr?.data || fr || {};
       const att = root.attendance || {};
       const st = root.status || {};
@@ -828,13 +920,15 @@ const CaptureFlow = ({
           <View style={styles.modalHead}>
             <View style={{ flex: 1 }}>
               <Text style={styles.modalKicker}>{
+                skipGeo ? 'FACE VERIFICATION' :
                 step === 'location' ? 'STEP 1 OF 2 · LOCATION' :
                 step === 'camera' ? 'STEP 2 OF 2 · FACE' :
                 step === 'verifying' ? 'ALMOST DONE' :
                 step === 'result' ? '✓ DONE' : '…'
               }</Text>
               <Text style={styles.modalTitle}>
-                {step === 'location' ? 'Confirm your location' :
+                {skipGeo && step === 'camera' ? 'Complete pending face check' :
+                step === 'location' ? 'Confirm your location' :
                  step === 'camera' ? `Face check · Check-${kind}` :
                  step === 'verifying' ? 'Verifying you…' :
                  step === 'result' ? (result?.accepted ? 'Verified ✓' : 'Verification failed') :
@@ -865,8 +959,8 @@ const CaptureFlow = ({
             />
           )}
 
-          {step === 'camera' && (
-            <View>
+          {step === 'camera' && (canFace ? (
+              <View>
               <View style={styles.cameraWrap}>
                 {Platform.OS === 'web' || !permission?.granted ? (
                   <View style={styles.cameraFallback}>
@@ -925,8 +1019,16 @@ const CaptureFlow = ({
                 <MaterialCommunityIcons name="camera-iris" size={22} color="#FFFFFF" />
                 <Text style={styles.snapText}>Capture & Verify</Text>
               </TouchableOpacity>
-            </View>
-          )}
+              </View>
+            ) : (
+              <View style={styles.center}>
+                <MaterialCommunityIcons name="shield-lock-outline" size={40} color={colors.textMuted} />
+                <Text style={styles.captureMsg}>Face verification is not enabled for your account.</Text>
+                <TouchableOpacity onPress={onClose} style={styles.locCancelBtn}>
+                  <Text style={styles.locCancelText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
 
           {step === 'verifying' && <VerifyingView selfieUri={selfieUri} />}
 
@@ -1270,7 +1372,7 @@ function labelReason(r?: string) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: colors.clayBg },
   tabScroll: { flexGrow: 0, flexShrink: 0 },
   tabRow: {
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: 6,
@@ -1292,12 +1394,11 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 22, fontWeight: '800', color: colors.white, marginTop: 4 },
   heroLastPunch: { marginTop: 10, fontSize: 12, color: 'rgba(255,255,255,0.9)', fontWeight: '600' },
   clayBlock: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
+    backgroundColor: colors.claySurface,
+    borderRadius: radii.clay,
     padding: spacing.md,
     marginTop: spacing.md,
-    borderWidth: 1, borderColor: '#EEEFF1',
-    ...shadow.card,
+    ...(clay.surface as any),
   },
   toggleWrap: {
     marginTop: spacing.md,
@@ -1330,20 +1431,20 @@ const styles = StyleSheet.create({
   timeDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.3)', alignSelf: 'stretch' },
   timeVal: { fontSize: 17, fontWeight: '800', color: colors.white },
   timeLab: { fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 2, letterSpacing: 0.8, fontWeight: '600' },
-  cardLabel: { fontSize: 10, fontWeight: '800', color: '#8A9099', letterSpacing: 1.4 },
+  cardLabel: { fontSize: 10, fontWeight: '800', color: colors.clayMuted, letterSpacing: 1.4 },
   typeRow: {
     flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12,
   },
   typeBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 10,
-    backgroundColor: '#F2F3F5',
+    backgroundColor: colors.clayBgSoft,
     borderRadius: radii.pill,
   },
   typeBtnActive: {
     backgroundColor: colors.primary,
   },
-  typeBtnText: { fontSize: 12, fontWeight: '700', color: '#3A3F47' },
+  typeBtnText: { fontSize: 12, fontWeight: '700', color: colors.clayDark },
   checkBtnWrap: { marginTop: spacing.md, borderRadius: radii.lg, overflow: 'hidden' },
   checkBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
   KeyboardAvoidingView, Platform, ActivityIndicator, LayoutAnimation, UIManager, Image,
@@ -6,14 +6,39 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { useAuth } from '../src/auth';
-import { api } from '../src/api';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useAuth, type User } from '../src/auth';
+import { api, setRefreshToken } from '../src/api';
 import { colors, radii, spacing, clay, BRAND } from '../src/theme';
 import { ClayCard, ClayInput, ClayLabel } from '../src/components/Clay';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+function toRole(value?: string | null): 'student' | 'staff' | 'admin' {
+  const v = String(value || '').toLowerCase();
+  if (v === 'student' || v === 'staff' || v === 'admin') return v;
+  return 'staff';
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is string => typeof v === 'string').map((v) => v.trim()).filter(Boolean);
+}
+
+function parseAuthResponse(res: any) {
+  const payload = res?.data ?? res ?? {};
+  return {
+    success: res?.success,
+    message: res?.message || payload?.message,
+    token: payload?.access_token || payload?.token || res?.access_token || res?.token,
+    refreshToken: payload?.refresh_token || res?.refresh_token,
+    permissions: asStringArray(payload?.rbac ?? payload?.permissions ?? res?.rbac ?? res?.permissions),
+    user: payload?.user ?? res?.user,
+    qid: payload?.qid ?? res?.qid,
+    role: payload?.type ?? payload?.role ?? payload?.user?.role ?? res?.type ?? res?.role ?? res?.user?.role,
+  };
 }
 
 function MicrosoftLogo({ size = 18 }: { size?: number }) {
@@ -31,6 +56,7 @@ function MicrosoftLogo({ size = 18 }: { size?: number }) {
 export default function Login() {
   const router = useRouter();
   const { setSession } = useAuth();
+  const params = useLocalSearchParams<{ role?: string | string[] }>();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -40,8 +66,53 @@ export default function Login() {
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState('');
   const [otpHint, setOtpHint] = useState('');
+  const [resendIn, setResendIn] = useState(0);
 
   const goHome = () => router.replace('/(tabs)');
+  const selectedRole = Array.isArray(params.role) ? params.role[0] : params.role;
+
+  React.useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((s) => Math.max(0, s - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
+  const establishSession = async (rawResponse: any) => {
+    const parsed = parseAuthResponse(rawResponse);
+    if (parsed.success === false) throw new Error(parsed.message || 'Authentication failed');
+    if (!parsed.token) throw new Error('Missing access token in login response');
+
+    let sessionUser: User | null = parsed.user ?? null;
+    if (!sessionUser) {
+      const fallbackId = parsed.qid || 'user';
+      sessionUser = {
+        id: fallbackId,
+        qid: parsed.qid || fallbackId,
+        email: `${String(fallbackId).toLowerCase()}@local.user`,
+        // OTP verify only returns qid/tokens/rbac — never use QID as the greeting name.
+        name: 'User',
+        role: toRole(parsed.role || selectedRole),
+      };
+    } else if (
+      sessionUser.name &&
+      sessionUser.qid &&
+      String(sessionUser.name).toLowerCase() === String(sessionUser.qid).toLowerCase()
+    ) {
+      sessionUser = { ...sessionUser, name: 'User' };
+    }
+    await setSession(parsed.token, sessionUser, parsed.permissions);
+    if (parsed.refreshToken) {
+      await setRefreshToken(parsed.refreshToken);
+    }
+
+    // Real display name comes from GET /staff/me/profile (`users.name`).
+    try {
+      const me = await api.me(true);
+      if (me) await setSession(parsed.token, me, parsed.permissions);
+    } catch (e: any) {
+      console.warn('Profile load after login failed:', e?.message || e);
+    }
+  };
 
   // ----- OTP -----
   const onSendOtp = async () => {
@@ -54,6 +125,7 @@ export default function Login() {
       setOtpSent(true);
       setOtp('');
       setOtpHint(res.message || 'OTP sent.');
+      setResendIn(30);
     } catch (e: any) {
       setError(e.message || 'Could not send OTP');
     } finally { setLoading(false); }
@@ -64,7 +136,7 @@ export default function Login() {
     setError(''); setLoading(true);
     try {
       const res = await api.otpVerify(phone.replace(/\D/g, ''), otp.trim());
-      await setSession(res.token, res.user);
+      await establishSession(res);
       goHome();
     } catch (e: any) {
       setError(e.message || 'OTP verification failed');
@@ -73,7 +145,7 @@ export default function Login() {
 
   const resetOtp = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setOtpSent(false); setOtp(''); setOtpHint(''); setError('');
+    setOtpSent(false); setOtp(''); setOtpHint(''); setError(''); setResendIn(0);
   };
 
   // ----- Microsoft -----
@@ -81,7 +153,7 @@ export default function Login() {
     setError(''); setLoading(true);
     try {
       const res = await api.microsoft();
-      await setSession(res.token, res.user);
+      await establishSession(res);
       goHome();
     } catch (e: any) {
       setError(e.message || 'Microsoft sign-in failed');
@@ -95,16 +167,14 @@ export default function Login() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          {/* Hero — MUOne brand */}
+          {/* Hero — MUOne brand lockup */}
           <View style={styles.heroWrap}>
-            <View style={[styles.logoCard, clay.surface as any]}>
-              <Image source={{ uri: BRAND.logoUrl }} style={styles.logoImg} resizeMode="contain" />
-            </View>
-            <View style={styles.wordmarkRow}>
-              <Text style={styles.wmMU}>MU</Text>
-              <Text style={styles.wmOne}>One</Text>
-            </View>
-            <Text style={styles.subtitle}>one app for everything campus</Text>
+            <Image
+              source={BRAND.logo}
+              style={styles.brandLogo}
+              resizeMode="contain"
+              accessibilityLabel="MUOne — Connected by One."
+            />
           </View>
 
           {/* Form card — OTP only */}
@@ -163,8 +233,10 @@ export default function Login() {
                 {!!error && <Text style={styles.error} testID="login-error">{error}</Text>}
 
                 <PrimaryButton label="Verify & Sign In" loading={loading} onPress={onVerifyOtp} testID="verify-otp-button" />
-                <TouchableOpacity onPress={onSendOtp} disabled={loading} style={styles.resendBtn} testID="resend-otp">
-                  <Text style={styles.resendText}>Didn&apos;t get it? Resend OTP</Text>
+                <TouchableOpacity onPress={onSendOtp} disabled={loading || resendIn > 0} style={styles.resendBtn} testID="resend-otp">
+                  <Text style={[styles.resendText, (loading || resendIn > 0) && { opacity: 0.5 }]}>
+                    {resendIn > 0 ? `Resend OTP in ${resendIn}s` : "Didn&apos;t get it? Resend OTP"}
+                  </Text>
                 </TouchableOpacity>
               </>
             )}
@@ -230,16 +302,7 @@ const styles = StyleSheet.create({
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxl },
 
   heroWrap: { alignItems: 'center', marginTop: spacing.md, marginBottom: spacing.lg },
-  logoCard: {
-    width: 92, height: 92, borderRadius: 24,
-    backgroundColor: colors.white,
-    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md,
-  },
-  logoImg: { width: 58, height: 58 },
-  brandLogo: { width: 250, height: 74 },
-  wordmarkRow: { flexDirection: 'row', alignItems: 'baseline' },
-  wmMU: { fontSize: 38, fontWeight: '900', color: colors.primary, letterSpacing: -0.5 },
-  wmOne: { fontSize: 38, fontWeight: '800', color: colors.clayDark, letterSpacing: -0.5 },
+  brandLogo: { width: 260, height: 110 },
   subtitle: { fontSize: 13, color: colors.clayMuted, marginTop: 6, fontWeight: '500', textAlign: 'center' },
 
   segment: {

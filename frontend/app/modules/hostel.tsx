@@ -73,7 +73,7 @@ export default function Hostel() {
               </Card>
 
               <Text style={styles.section}>Roommates</Text>
-              {room.roommates.map((r: any, i: number) => (
+              {room.roommates?.map((r: any, i: number) => (
                 <Card key={i} style={{ marginTop: spacing.sm }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
                     <View style={styles.avatar}><Text style={styles.avatarText}>{r.name.split(' ').map((p: string) => p[0]).join('')}</Text></View>
@@ -87,7 +87,7 @@ export default function Hostel() {
 
               <Text style={styles.section}>Facilities</Text>
               <View style={styles.chips}>
-                {room.facilities.map((f: string) => (
+                {(room.facilities ?? []).map((f: string) => (
                   <View key={f} style={styles.chip}><Text style={styles.chipText}>{f}</Text></View>
                 ))}
               </View>

@@ -40,10 +40,12 @@ export default function RoleSelect() {
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={{ paddingBottom: spacing.xl }}>
         <View style={styles.header}>
-          <View style={styles.logoBadge}>
-            <Image source={{ uri: BRAND.logoUrl }} style={styles.muLogo} resizeMode="contain" />
-          </View>
-          <Text style={styles.brand}>{BRAND.name.toUpperCase()}</Text>
+          <Image
+            source={BRAND.logo}
+            style={styles.brandLogo}
+            resizeMode="contain"
+            accessibilityLabel="MUOne — Connected by One."
+          />
           <Text style={styles.welcome}>Welcome 👋</Text>
           <Text style={styles.tagline}>Sign in to continue as</Text>
         </View>
@@ -100,16 +102,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.lg,
   },
-  logoBadge: {
-    width: 72, height: 72, borderRadius: 18,
-    backgroundColor: colors.white,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: spacing.md,
-    borderWidth: 1, borderColor: colors.border,
-  },
-  muLogo: { width: 50, height: 50 },
-  logoLetter: { fontSize: 38, fontWeight: '900', color: colors.white, letterSpacing: -1, marginTop: -4 },
-  brand: { fontSize: 13, fontWeight: '800', color: colors.primary, letterSpacing: 2 },
+  brandLogo: { width: 220, height: 92, marginBottom: spacing.sm },
   welcome: { fontSize: 32, fontWeight: '800', color: colors.text, marginTop: spacing.sm, letterSpacing: -0.5 },
   tagline: { fontSize: 16, color: colors.textSecondary, marginTop: spacing.xs },
   cardWrap: {

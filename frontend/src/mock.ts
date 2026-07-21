@@ -41,7 +41,7 @@ const K = {
   ticketReads: 'mock_ticket_reads',
 };
 
-// ---------- mock identities (used for role-based access later) ----------
+// ---------- mock identities ----------
 const VENUE = [{ venue_id: 2, venue_name: 'ECSOE Building', latitude: 17.5685454, longitude: 78.4354396, accuracy: null, radius: 100 }];
 
 const STAFF_USER = {
@@ -50,12 +50,88 @@ const STAFF_USER = {
   student_id: null, employee_id: 'MUCS2722', avatar: null, phone: '9059721442',
   qid: 'QT208195', gender: 'Male', type: 'Staff', designated_locations: VENUE,
 };
+const ROLE_PERMISSIONS: Record<'student' | 'staff' | 'admin', string[]> = {
+  student: [
+    'VIEW_HALL_TICKET_MOBILE_BUTTON',
+    'VIEW_EXAMINATIONS_MOBILE_PAGE',
+    'VIEW_MESS_MENU_MOBILE_PAGE',
+    'MESS_LIVE_MOBILE_WIDGET',
+    'APPLY_LEAVE_MOBILE_BUTTON',
+    'VIEW_LEAVE_MOBILE_PAGE',
+    'VIEW_HOLIDAY_MOBILE_WIDGET',
+    'VIEW_CAMPUS_NEWS_MOBILE_WIDGET',
+    'TICKET.CREATE_TICKETING_MOBILE_SCREEN',
+    'TICKETS.VIEW_TICKETING_MOBILE_SCREEN',
+  ],
+  staff: [
+    'CHECK_IN.CREATE_MARK_ATTENDANCE_MOBILE_SCREEN',
+    'CHECK_OUT.CREATE_MARK_ATTENDANCE_MOBILE_SCREEN',
+    'TIMELINE.VIEW_MARK_ATTENDANCE_MOBILE_SCREEN',
+    'LOCATIONS.VIEW_MARK_ATTENDANCE_MOBILE_SCREEN',
+    'GEO_VALIDATE_MOBILE_BUTTON',
+    'FACE_VALIDATE_MOBILE_BUTTON',
+    'VIEW_ATTENDANCE_MOBILE_PAGE',
+    'VIEW_MESS_MENU_MOBILE_PAGE',
+    'MESS_LIVE_MOBILE_WIDGET',
+    'CREATE_VISITOR_MOBILE_BUTTON',
+    'VIEW_VISITOR_MOBILE_PAGE',
+    'APPLY_LEAVE_MOBILE_BUTTON',
+    'VIEW_LEAVE_MOBILE_PAGE',
+    'VIEW_HOLIDAY_MOBILE_WIDGET',
+    'VIEW_CAMPUS_NEWS_MOBILE_WIDGET',
+    'TICKET.CREATE_TICKETING_MOBILE_SCREEN',
+    'TICKETS.VIEW_TICKETING_MOBILE_SCREEN',
+  ],
+  admin: [
+    'VIEW_ADMIN_DASHBOARD_MOBILE',
+    'OPEN_HR_PORTAL_MOBILE_BUTTON',
+    'OPEN_ADMIN_CONSOLE_MOBILE_BUTTON',
+    'VIEW_HALL_TICKET_MOBILE_BUTTON',
+    'VIEW_EXAMINATIONS_MOBILE_PAGE',
+    'VIEW_MESS_MENU_MOBILE_PAGE',
+    'MESS_LIVE_MOBILE_WIDGET',
+    'CREATE_VISITOR_MOBILE_BUTTON',
+    'APPROVE_VISITOR_MOBILE_BUTTON',
+    'VIEW_VISITOR_MOBILE_PAGE',
+    'CHECK_IN.CREATE_MARK_ATTENDANCE_MOBILE_SCREEN',
+    'CHECK_OUT.CREATE_MARK_ATTENDANCE_MOBILE_SCREEN',
+    'TIMELINE.VIEW_MARK_ATTENDANCE_MOBILE_SCREEN',
+    'LOCATIONS.VIEW_MARK_ATTENDANCE_MOBILE_SCREEN',
+    'GEO_VALIDATE_MOBILE_BUTTON',
+    'FACE_VALIDATE_MOBILE_BUTTON',
+    'VIEW_ATTENDANCE_MOBILE_PAGE',
+    'APPLY_LEAVE_MOBILE_BUTTON',
+    'APPROVE_LEAVE_HR_ADMIN_MOBILE_BUTTON',
+    'VIEW_LEAVE_MOBILE_PAGE',
+    'VIEW_HOLIDAY_MOBILE_WIDGET',
+    'VIEW_CAMPUS_NEWS_MOBILE_WIDGET',
+    'TICKET.CREATE_TICKETING_MOBILE_SCREEN',
+    'TICKETS.VIEW_TICKETING_MOBILE_SCREEN',
+  ],
+};
 
-// Single sign-in identity. Access is governed by this user's `role` (RBAC) — there
-// are intentionally NO multiple/role-switching logins; the real role will arrive
-// from your backend later and drive feature gating.
+function permissionsForUser(user: any): string[] {
+  const role = String(user?.role || '').toLowerCase();
+  const base =
+    role === 'admin'
+      ? ROLE_PERMISSIONS.admin
+      : role === 'student'
+        ? ROLE_PERMISSIONS.student
+        : ROLE_PERMISSIONS.staff;
+  const withDepartment = [...base];
+  if (role === 'staff' && String(user?.department || '').toLowerCase() === 'security') {
+    withDepartment.push('VIEW_GATE_LOGS_MOBILE_PAGE');
+  }
+  return Array.from(new Set(withDepartment));
+}
+
+function withPermissions<T extends Record<string, any>>(user: T): T & { permissions: string[] } {
+  return { ...user, permissions: permissionsForUser(user) };
+}
+
+// Single sign-in identity.
 function currentMockUser(overrides: any = {}): any {
-  return { ...clone(STAFF_USER), ...overrides };
+  return withPermissions({ ...clone(STAFF_USER), ...overrides });
 }
 
 // ---------- static datasets (captured from the original API) ----------
@@ -103,7 +179,6 @@ const MESS_MEALS = [
   { key: 'dinner', label: 'Dinner', hours: '7:30 – 9:30 PM', icon: 'food-turkey' },
 ];
 
-// Shared menu across all three messes (today)
 const MESS_MENU: Record<string, string[]> = {
   breakfast: ['Idli & Sambar', 'Mini Dosa', 'Boiled Eggs', 'Upma', 'Seasonal Fruits', 'Tea / Coffee'],
   lunch: ['Veg Biryani', 'Dal Tadka', 'Aloo Gobi', 'Curd Rice', 'Salad', 'Gulab Jamun'],
@@ -111,7 +186,6 @@ const MESS_MENU: Record<string, string[]> = {
   dinner: ['Roti', 'Paneer Butter Masala', 'Jeera Rice', 'Mixed Veg', 'Vanilla Ice Cream'],
 };
 
-// NOTE: occupancy_pct values are placeholders until the live occupancy API is wired.
 const MESS = {
   meals: MESS_MEALS,
   menu: MESS_MENU,
@@ -125,7 +199,6 @@ const MESS = {
   ],
 };
 
-// Derive the meal currently being served from local time (null = between meals).
 function messCurrentMeal(): string | null {
   const d = new Date();
   const h = d.getHours() + d.getMinutes() / 60;
@@ -281,23 +354,36 @@ async function getTickets(): Promise<any[]> {
 
 // ---------- the mock API (mirrors src/api.ts `api`) ----------
 export const mockApi = {
-  // auth — single sign-in identity; role drives RBAC.
+  // auth — successful login/OTP returns a permissions array.
   login: async (email: string, _password: string, _role?: string) => {
-    await delay(); const user = currentMockUser(email ? { email } : {}); await setStore(K.user, user);
-    return { token: `mock-token-${user.id}`, user };
+    await delay();
+    const user = currentMockUser(email ? { email } : {});
+    await setStore(K.user, user);
+    return { token: `mock-token-${user.id}`, user, permissions: user.permissions };
   },
   otpRequest: async (phone: string) => {
     await delay(); return { ok: true, phone, demo_otp: '123456', message: 'OTP sent (demo: 123456)' };
   },
   otpVerify: async (phone: string, _code: string) => {
-    await delay(); const user = currentMockUser({ phone }); await setStore(K.user, user);
-    return { token: `mock-token-${user.id}`, user };
+    await delay();
+    const user = currentMockUser({ phone });
+    await setStore(K.user, user);
+    return { token: `mock-token-${user.id}`, user, permissions: user.permissions };
   },
   microsoft: async (_email?: string) => {
-    await delay(); const user = currentMockUser(); await setStore(K.user, user);
-    return { token: `mock-token-${user.id}`, user };
+    await delay();
+    const user = currentMockUser();
+    await setStore(K.user, user);
+    return { token: `mock-token-${user.id}`, user, permissions: user.permissions };
   },
-  me: async (): Promise<any> => { await delay(60); return getStore(K.user, currentMockUser()); },
+  me: async (): Promise<any> => {
+    await delay(60);
+    const stored = await getStore<any>(K.user, currentMockUser());
+    if (Array.isArray(stored?.permissions) && stored.permissions.length > 0) return stored;
+    const user = withPermissions(stored);
+    await setStore(K.user, user);
+    return user;
+  },
   demoAccounts: async () => { await delay(); return []; },
 
   // exams
@@ -319,6 +405,7 @@ export const mockApi = {
   attendanceToday: async () => { await delay(); return { date: todayKey(), check_in: null, check_out: null, events: [], work_seconds: 0, status: 'absent' }; },
   attendanceStats: async () => { await delay(); return buildStats(); },
   attendanceGeofences: async () => { await delay(); return clone(GEOFENCES); },
+  authorizedLocations: async () => { await delay(); return clone(VENUE); },
   geoValidate: async (_lat: number, _long: number, _status: 'IN' | 'OUT') => {
     await delay(); return { success: true, message: null, venue_id: 2, venue_name: 'ECSOE Building', attendance_id: null, current_state: 'PENDING_FACE' };
   },
@@ -345,6 +432,52 @@ export const mockApi = {
       work_seconds = Math.max(0, Math.floor((new Date(t.check_out_at).getTime() - new Date(t.check_in_at).getTime()) / 1000));
     }
     return { date: todayKey(), check_in_at: t.check_in_at, check_out_at: t.check_out_at, venue: t.venue, work_seconds, events: t.events };
+  },
+  attendanceStatus: async () => {
+    await delay();
+    const t = await mockApi.timelineToday();
+    const base = {
+      geo_validation: false,
+      face_recognition: false,
+      geo_marked_at: null as string | null,
+      face_recognition_marked_at: null as string | null,
+      last_activity: null as string | null,
+      mode: null as string | null,
+      attendance_id: null as number | null,
+      roster_assignment_id: null as number | null,
+      venue_id: null as number | null,
+      reason: null as string | null,
+      previous_session_auto_closed: false,
+    };
+    if (t.check_in_at && t.check_out_at) {
+      return {
+        ...base,
+        current_state: 'CHECKED_OUT',
+        current_status: 'OUT' as const,
+        geo_validation: true,
+        face_recognition: true,
+        geo_marked_at: t.check_in_at,
+        face_recognition_marked_at: t.check_out_at,
+        last_activity: t.check_out_at,
+      };
+    }
+    if (t.check_in_at) {
+      return {
+        ...base,
+        current_state: 'CHECKED_IN',
+        current_status: 'IN' as const,
+        geo_validation: true,
+        face_recognition: true,
+        geo_marked_at: t.check_in_at,
+        face_recognition_marked_at: t.check_in_at,
+        last_activity: t.check_in_at,
+      };
+    }
+    return {
+      ...base,
+      current_state: 'NO_RECORD',
+      current_status: null,
+    };
   },
   attendanceAdminToday: async () => {
     await delay();
@@ -452,7 +585,10 @@ export const mockApi = {
   news: async () => { await delay(); return clone(NEWS); },
 
   // tickets
-  ticketDepartments: async () => { await delay(60); return clone(TICKET_DEPARTMENTS); },
+  ticketDepartments: async () => {
+    await delay(60);
+    return TICKET_DEPARTMENTS.map((name, i) => ({ id: String(i + 1), name }));
+  },
   ticketLookup: async (studentId?: string) => {
     await delay(450);
     const u = await getStore<any>(K.user, currentMockUser());
@@ -477,32 +613,32 @@ export const mockApi = {
     const list = await getTickets();
     const t = list.find((x) => x.id === id || x.ticket_no === id) || null;
     if (t) {
-      // Opening a ticket marks it read up to its latest update.
       const reads = await getStore<Record<string, string>>(K.ticketReads, {});
       reads[t.id] = nowIso();
       await setStore(K.ticketReads, reads);
     }
     return t;
   },
-  createTicket: async (payload: { subject: string; description: string; department: string; requester?: any }) => {
+  createTicket: async (payload: { subject: string; description: string; department?: string; department_id?: string; requester?: any }) => {
     await delay();
     const list = await getTickets();
     const maxNo = list.reduce((m, t) => Math.max(m, parseInt(String(t.ticket_no).replace(/\D/g, '')) || 0), 0);
     const no = maxNo + 1;
     const now = nowIso().slice(0, 19);
+    const deptName = payload.department || payload.department_id || 'General';
     const rec = {
       id: `tkt_${no}`,
       ticket_no: `TKT-${String(no).padStart(5, '0')}`,
       subject: payload.subject,
       description: payload.description,
-      department: payload.department,
+      department: deptName,
       status: 'Open',
       priority: null,
       channel: 'Portal',
       requester: payload.requester || null,
       created_at: now,
       updated_at: now,
-      journey: [payload.department, 'Open'],
+      journey: [deptName, 'Open'],
       messages: [{ id: 'm1', author: 'You', author_type: 'requester', text: payload.description, at: now }],
       activity: [{ id: 'a1', type: 'created', label: 'Ticket created', at: now }],
     };
