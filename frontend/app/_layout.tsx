@@ -15,11 +15,11 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    'Sora-Regular':    require('../assets/fonts/Sora-Regular.ttf'),
-    'Sora-Medium':     require('../assets/fonts/Sora-Medium.ttf'),
-    'Sora-SemiBold':   require('../assets/fonts/Sora-SemiBold.ttf'),
-    'Sora-Bold':       require('../assets/fonts/Sora-Bold.ttf'),
-    'Sora-ExtraBold':  require('../assets/fonts/Sora-ExtraBold.ttf'),
+    'Raleway-Regular':    require('../assets/fonts/Raleway-Regular.ttf'),
+    'Raleway-Medium':     require('../assets/fonts/Raleway-Medium.ttf'),
+    'Raleway-SemiBold':   require('../assets/fonts/Raleway-SemiBold.ttf'),
+    'Raleway-Bold':       require('../assets/fonts/Raleway-Bold.ttf'),
+    'Raleway-ExtraBold':  require('../assets/fonts/Raleway-ExtraBold.ttf'),
   });
 
   useEffect(() => {

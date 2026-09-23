@@ -12,7 +12,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { api, resolveAttendanceAction } from '../../src/api';
 import { useAuth } from '../../src/auth';
 import { colors, radii, shadow, spacing, clay } from '../../src/theme';
-import { Card, Pill, Badge, ScreenHeader, Empty } from '../../src/ui';
+import { Card, Badge, ScreenHeader, Empty } from '../../src/ui';
 import { ProgressRing, TodayTimeline } from '../../src/components/AttendanceVisuals';
 import { showAppAlert } from '../../src/components/AppAlert';
 import { PermissionGate } from '../../src/components/PermissionGate';
@@ -189,13 +189,12 @@ export default function StaffAttendanceScreen() {
   const tabs = useMemo(
     () => {
       const granted = user?.permissions ?? [];
-      const canView = hasPermission(granted, RBAC.VIEW_ATTENDANCE);
+      const canHistory = hasPermission(granted, RBAC.VIEW_ATTENDANCE_HISTORY);
+      const canStats = hasPermission(granted, RBAC.VIEW_ATTENDANCE_STATS);
       const base = [
         { id: 'today',   label: 'Today',   icon: 'today-outline' },
-        ...(canView ? [
-          { id: 'history', label: 'History', icon: 'time-outline' },
-          { id: 'stats',   label: 'Stats',   icon: 'stats-chart-outline' },
-        ] : []),
+        ...(canHistory ? [{ id: 'history', label: 'History', icon: 'time-outline' }] : []),
+        ...(canStats ? [{ id: 'stats', label: 'Stats', icon: 'stats-chart-outline' }] : []),
         ...(isAdmin ? [{ id: 'team', label: 'Team', icon: 'people-outline' }] : []),
       ];
       return base;
@@ -210,21 +209,29 @@ export default function StaffAttendanceScreen() {
         onBack={() => router.back()}
       />
 
-      <ScrollView
-        horizontal showsHorizontalScrollIndicator={false}
-        style={styles.tabScroll}
-        contentContainerStyle={styles.tabRow}
-      >
-        {tabs.map((t: any) => (
-          <Pill
-            key={t.id}
-            label={t.label}
-            active={tab === t.id}
-            onPress={() => setTab(t.id)}
-            testID={`tab-${t.id}`}
-          />
-        ))}
-      </ScrollView>
+      <View style={styles.tabBar} testID="attendance-tabs">
+        {tabs.map((t: any) => {
+          const active = tab === t.id;
+          return (
+            <TouchableOpacity
+              key={t.id}
+              style={[styles.tabItem, active && styles.tabItemActive]}
+              onPress={() => setTab(t.id)}
+              activeOpacity={0.85}
+              testID={`tab-${t.id}`}
+            >
+              <Ionicons
+                name={t.icon as any}
+                size={16}
+                color={active ? colors.white : colors.clayMuted}
+              />
+              <Text style={[styles.tabLabel, active && styles.tabLabelActive]} numberOfLines={1}>
+                {t.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xxl }}>
         {tab === 'today' && (
@@ -319,10 +326,9 @@ const TodayTab = ({
         </TouchableOpacity>
       </PermissionGate>
 
-      {/* Today's Timeline */}
+      {/* Working time */}
       <PermissionGate permission={RBAC.VIEW_ATTENDANCE_TIMELINE}>
       <View style={[styles.clayBlock]}>
-        <Text style={styles.cardLabel}>TODAY&apos;S TIMELINE</Text>
         <TodayTimeline
           checkIn={checkInAt}
           checkOut={checkOutAt}
@@ -1373,10 +1379,40 @@ function labelReason(r?: string) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.clayBg },
-  tabScroll: { flexGrow: 0, flexShrink: 0 },
-  tabRow: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: 6,
+  tabBar: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.md,
+    marginTop: 4,
+    marginBottom: 4,
+    padding: 4,
+    backgroundColor: colors.white,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#EEEFF1',
+    gap: 4,
+    ...shadow.card,
+  },
+  tabItem: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 11,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+  },
+  tabItemActive: {
+    backgroundColor: colors.primary,
+  },
+  tabLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.clayMuted,
+    letterSpacing: -0.2,
+  },
+  tabLabelActive: {
+    color: colors.white,
   },
   heroWrap: {
     borderRadius: radii.clay,

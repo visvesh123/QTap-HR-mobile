@@ -14,7 +14,7 @@
         "NSCameraUsageDescription": "Take selfie for attendance verification",
         "NSLocationWhenInUseUsageDescription": "Verify on-campus attendance"
       },
-      "bundleIdentifier": "app.emergent.uniattendancehub2e69f033d"
+      "bundleIdentifier": "com.mahindrauniversity.muone"
     },
     "android": {
       "adaptiveIcon": {
@@ -27,7 +27,7 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION"
       ],
-      "package": "app.emergent.uniattendancehub25ae7a292"
+      "package": "com.mahindrauniversity.muone"
     },
     "web": {
       "bundler": "metro",
@@ -49,6 +49,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "85f62ea7-939a-4add-8142-1c9a46569f1c"
+      }
     }
   }
 }

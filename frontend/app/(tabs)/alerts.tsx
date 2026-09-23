@@ -6,18 +6,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../../src/api';
-import { colors, spacing } from '../../src/theme';
+import { colors } from '../../src/theme';
 import { Badge } from '../../src/ui';
 
 /* ───────────── Palette (matches Home / Services / Profile) ───────────── */
 const C = {
-  bg: '#FFFFFF', ink: '#15171C', inkSoft: '#3A3F47', muted: '#8A9099',
-  field: '#F2F3F5', white: '#FFFFFF', red: '#DC143C', redTint: '#FCE7EC',
+  bg: '#FFFFFF', ink: '#222222', inkSoft: '#3F3F3F', muted: '#717171',
+  field: '#F7F7F7', white: '#FFFFFF', red: '#DC143C', redTint: '#FCEEF1',
 };
-const SOFT = Platform.select({
-  web: { boxShadow: '0 2px 4px rgba(20,23,28,0.04), 0 8px 22px rgba(20,23,28,0.10)' } as any,
-  default: { shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 14, elevation: 4 },
-});
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -169,13 +165,13 @@ export default function Alerts() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Alerts & Announcements</Text>
-        <Text style={styles.subtitle}>Tap a headline to read more</Text>
+        <Text style={styles.title}>Alerts</Text>
+        <Text style={styles.subtitle}>Campus news, events & announcements</Text>
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: spacing.md, gap: spacing.sm }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.ink} />}
         showsVerticalScrollIndicator={false}
       >
         {items.map((item) => (
@@ -193,32 +189,31 @@ export default function Alerts() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  title: { fontSize: 28, fontWeight: '800', color: C.ink, letterSpacing: -0.6 },
-  subtitle: { fontSize: 14, color: C.muted, marginTop: 4, fontWeight: '500' },
+  header: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8 },
+  title: { fontSize: 26, fontWeight: '700', color: C.ink, letterSpacing: -0.5 },
+  subtitle: { fontSize: 15, color: C.muted, marginTop: 4, fontWeight: '400' },
 
   card: {
     backgroundColor: C.white,
-    borderRadius: 22,
-    borderWidth: 1, borderColor: '#EEEFF1',
-    ...SOFT,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#EBEBEB',
   },
-  cardExpanded: {},
+  cardExpanded: { paddingBottom: 8 },
   headRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingVertical: 16,
   },
-  iconChip: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: C.redTint },
-  thumb: { width: 52, height: 52, borderRadius: 16, backgroundColor: C.field },
-  chevBox: { width: 44, height: 36, borderRadius: 12, backgroundColor: C.field, alignItems: 'center', justifyContent: 'center' },
+  iconChip: { width: 52, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.field },
+  thumb: { width: 52, height: 52, borderRadius: 12, backgroundColor: C.field },
+  chevBox: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   headTextWrap: { flex: 1, gap: 3 },
-  headTitle: { fontSize: 15.5, fontWeight: '700', color: C.ink, letterSpacing: -0.2 },
-  headSnippet: { fontSize: 12.5, color: C.muted },
+  headTitle: { fontSize: 15, fontWeight: '600', color: C.ink },
+  headSnippet: { fontSize: 14, color: C.muted },
 
-  body: { paddingHorizontal: 16, paddingBottom: 16 },
-  bodyImage: { width: '100%', height: 440, borderRadius: 16, marginBottom: 10, backgroundColor: C.field },
+  body: { paddingBottom: 16 },
+  bodyImage: { width: '100%', aspectRatio: 0.78, borderRadius: 12, marginBottom: 12, backgroundColor: C.field },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' },
   locRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  metaText: { fontSize: 11.5, color: C.muted, fontWeight: '600' },
-  bodyText: { fontSize: 13.5, color: C.inkSoft, lineHeight: 21 },
+  metaText: { fontSize: 13, color: C.muted, fontWeight: '500' },
+  bodyText: { fontSize: 15, color: C.inkSoft, lineHeight: 22 },
 });

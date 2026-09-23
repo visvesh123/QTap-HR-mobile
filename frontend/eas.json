@@ -1,0 +1,51 @@
+{
+  "cli": {
+    "version": ">= 21.0.2",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "apk": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "https://muone-hr-backend-dev-ggoqswadia-el.a.run.app",
+        "EXPO_PUBLIC_HR_API_URL": "https://muone-hr-backend-dev-ggoqswadia-el.a.run.app",
+        "EXPO_PUBLIC_HOSTELS_API_URL": "https://muone-hostels-backend-dev-ggoqswadia-el.a.run.app",
+        "EXPO_PUBLIC_TICKETING_API_URL": "https://dalmart.el.r.appspot.com",
+        "EXPO_PUBLIC_OTP_REQUEST_PATH": "/api/v1/otp/send",
+        "EXPO_PUBLIC_OTP_VERIFY_PATH": "/api/v1/otp/verify",
+        "EXPO_PUBLIC_OTP_REFRESH_PATH": "/api/v1/otp/refresh",
+        "EXPO_PUBLIC_STAFF_PROFILE_PATH": "/api/v1/staff/me/profile",
+        "EXPO_PUBLIC_NEWS_PATH": "/api/v1/news",
+        "EXPO_PUBLIC_HOLIDAYS_PATH": "/api/v1/holidays",
+        "EXPO_PUBLIC_AUTHORIZED_LOCATIONS_PATH": "/api/v1/staff/me/authorized-locations",
+        "EXPO_PUBLIC_ATTENDANCE_STATUS_PATH": "/api/v1/attendance/status",
+        "EXPO_PUBLIC_ATTENDANCE_VALIDATE_LOCATION_PATH": "/api/v1/attendance/validate/location",
+        "EXPO_PUBLIC_ATTENDANCE_VALIDATE_FACE_PATH": "/api/v1/attendance/validate/face",
+        "EXPO_PUBLIC_ATTENDANCE_CALENDAR_PATH": "/api/v1/attendance/history/calendar",
+        "EXPO_PUBLIC_ATTENDANCE_STREAK_PATH": "/api/v1/attendance/streak",
+        "EXPO_PUBLIC_LEAVE_CONTEXT_PATH": "/api/v1/leave/context",
+        "EXPO_PUBLIC_LEAVE_APPLY_PATH": "/api/v1/leave/apply",
+        "EXPO_PUBLIC_LEAVE_MY_PATH": "/api/v1/leave/my-leaves"
+      }
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

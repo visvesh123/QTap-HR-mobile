@@ -1,160 +1,154 @@
-import React, { useEffect, useRef } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions,
-  Animated, Easing, Platform,
-} from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/auth';
-import { TAB_SERVICES, tabServicesForUser } from '../../src/services-catalog';
+import { SECTIONED_SERVICES, tabServicesForUser } from '../../src/services-catalog';
 import { ServicePermissionGate } from '../../src/components/PermissionGate';
-
-/* ───────────── Palette (matches Home) ───────────── */
-const C = {
-  bg: '#FFFFFF',
-  ink: '#15171C',
-  inkSoft: '#3A3F47',
-  muted: '#8A9099',
-  field: '#F2F3F5',
-  white: '#FFFFFF',
-  red: '#DC143C',
-  redDark: '#A8102F',
-};
+import { AB, SearchPill, WishlistCard } from '../../src/components/ExploreUI';
 
 const UPCOMING = new Set(['leave', 'visitor']);
 
-const GAP = 12;
-const H_PAD = 20;
+const SERVICE_IMAGES: Record<string, string> = {
+  examinations: 'https://images.pexels.com/photos/256431/pexels-photo-256431.jpeg?auto=compress&cs=tinysrgb&w=900',
+  library: 'https://images.unsplash.com/photo-1521587760476-6c12a4b040da?w=900',
+  results: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=900',
+  hostel: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=900',
+  mess: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=900',
+  events: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=900',
+  certificates: 'https://images.unsplash.com/photo-1523580846011-d3a5bc257519?w=900',
+  'campus-map': 'https://images.unsplash.com/photo-1524661131558-7411f62d0c1d?w=900',
+  visitor: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=900',
+  attendance: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=900',
+  parcel: 'https://images.unsplash.com/photo-1607344645866-009c320b63e0?w=900',
+  gate: 'https://images.unsplash.com/photo-1562774053-701939374585?w=900',
+  alerts: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=900',
+  'admin-panel': 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=900',
+  'gate-logs': 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=900',
+  tickets: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=900',
+  leave: 'https://images.unsplash.com/photo-1506784983877-45594efa4cbe?w=900',
+};
 
-const SOFT = Platform.select({
-  web: { boxShadow: '0 2px 4px rgba(20,23,28,0.04), 0 8px 22px rgba(20,23,28,0.10)' } as any,
-  default: { shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.10, shadowRadius: 14, elevation: 4 },
-});
-
-function UpcomingBadge({ testID }: { testID?: string }) {
-  const pulse = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: Platform.OS !== 'web' }),
-        Animated.timing(pulse, { toValue: 0, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: Platform.OS !== 'web' }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
-  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.1] });
-  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.7] });
-  return (
-    <Animated.View style={[styles.badge, { transform: [{ scale }], opacity }]} testID={testID}>
-      <View style={styles.badgeDot} />
-    </Animated.View>
-  );
-}
-
-function ServiceTile({ s, tileW, onPress }: { s: any; tileW: number; onPress: () => void }) {
-  const Icon = s.iconLib === 'mci' ? MaterialCommunityIcons : Ionicons;
-  const upcoming = UPCOMING.has(s.key);
-  return (
-    <TouchableOpacity
-      style={[styles.tile, { width: tileW, height: tileW * 1.08 }, upcoming && styles.tileDim]}
-      activeOpacity={upcoming ? 1 : 0.85}
-      disabled={upcoming}
-      onPress={onPress}
-      testID={`service-tile-${s.key}`}
-    >
-      {upcoming && <UpcomingBadge testID={`upcoming-badge-${s.key}`} />}
-      <Icon name={s.icon as any} size={30} color={upcoming ? C.muted : C.red} />
-      <Text style={[styles.tileLabel, upcoming && { color: C.muted }]} numberOfLines={2}>{s.label}</Text>
-    </TouchableOpacity>
-  );
-}
+const SERVICE_SUB: Record<string, string> = {
+  examinations: 'Hall ticket & schedule',
+  library: 'Search, issue & RFID',
+  results: 'Grades and transcripts',
+  hostel: 'Room & complaints',
+  mess: 'Menus and occupancy',
+  events: 'Clubs and fests',
+  certificates: 'Bonafide & more',
+  'campus-map': 'Buildings & shortcuts',
+  visitor: 'Invite and approve',
+  attendance: 'Check-in / check-out',
+  parcel: 'Pickup and collect',
+  gate: 'RFID / QR pass',
+  alerts: 'Campus announcements',
+  'admin-panel': 'Staff and analytics',
+  'gate-logs': 'Entry and exit',
+  tickets: 'Raise and track',
+  leave: 'Apply and approve',
+};
 
 export default function Services() {
   const router = useRouter();
   const { user } = useAuth();
-  const { width } = useWindowDimensions();
+  const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState(false);
+
+  const enabled = tabServicesForUser(user?.role ?? '', user?.department, user?.permissions ?? []);
+  const sections = SECTIONED_SERVICES(user?.role ?? '', user?.department, user?.permissions ?? []);
+
+  const items = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const fromSections = sections.flatMap((s) => s.items.map((item) => ({ ...item, section: s.title })));
+    const extras = enabled
+      .filter((s) => !fromSections.some((item) => item.key === s.key))
+      .map((item) => ({ ...item, section: 'Services' }));
+    const merged = [...fromSections, ...extras];
+    const seen = new Set<string>();
+    const unique = merged.filter((s) => {
+      if (seen.has(s.key)) return false;
+      seen.add(s.key);
+      return true;
+    });
+    if (!q) return unique;
+    return unique.filter((s) =>
+      `${s.label} ${SERVICE_SUB[s.key] || ''} ${s.section}`.toLowerCase().includes(q),
+    );
+  }, [query, sections, enabled]);
+
   if (!user) return null;
 
-  const firstName = user.role === 'admin'
-    ? 'Admin'
-    : user.name.replace(/^(Dr\.?|Mr\.?|Mrs\.?|Ms\.?|Prof\.?)\s+/i, '').split(' ')[0];
-
-  const tileW = (Math.min(width, 720) - H_PAD * 2 - GAP * 2) / 3;
-  const enabledServices = tabServicesForUser(user.role, user.department, user.permissions ?? []);
+  const collageImages = items.slice(0, 4).map((s) => SERVICE_IMAGES[s.key] || SERVICE_IMAGES.tickets);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        {/* Greeting */}
-        <View style={styles.header}>
-          <Text style={styles.hi}>Hi {firstName},</Text>
-          <Text style={styles.heading}>What would you{'\n'}like to do today?</Text>
-        </View>
-
-        {/* Search field (matches Home) */}
-        <TouchableOpacity activeOpacity={0.7} style={styles.search} onPress={() => {}} testID="services-search">
-          <Ionicons name="search" size={20} color={C.muted} />
-          <Text style={styles.searchText}>Search a service…</Text>
+      <View style={styles.topBar}>
+        <Text style={styles.pageTitle}>Services</Text>
+        <TouchableOpacity style={styles.editBtn} onPress={() => setEditing((v) => !v)} testID="services-search">
+          <Text style={styles.editText}>{editing ? 'Done' : 'Edit'}</Text>
         </TouchableOpacity>
+      </View>
+      {editing && (
+        <SearchPill
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search a service"
+          subtitle="Attendance, tickets, mess…"
+        />
+      )}
 
-        {/* Minimalist 3-column grid — tile shown when user has ANY child RBAC permission */}
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.grid}>
-          {TAB_SERVICES.map((s) => (
-            <ServicePermissionGate key={s.key} service={s}>
-              <ServiceTile
-                s={s}
-                tileW={tileW}
-                onPress={() => { if (!UPCOMING.has(s.key)) router.push(s.route as any); }}
-              />
-            </ServicePermissionGate>
-          ))}
-          {enabledServices.length === 0 && (
-            <Text style={styles.emptyText}>No services are enabled for your account yet.</Text>
+          {items.length >= 4 && !query && (
+            <WishlistCard
+              images={collageImages}
+              title="Recently used"
+              subtitle="Your campus shortcuts"
+              onPress={() => {}}
+              testID="service-tile-recent"
+            />
           )}
+          {items.map((s) => {
+            const upcoming = UPCOMING.has(s.key);
+            return (
+              <ServicePermissionGate key={s.key} service={s}>
+                <WishlistCard
+                  image={SERVICE_IMAGES[s.key] || SERVICE_IMAGES.tickets}
+                  title={s.label}
+                  subtitle={upcoming ? 'Coming soon' : SERVICE_SUB[s.key] || s.section}
+                  onPress={() => { if (!upcoming) router.push(s.route as any); }}
+                  testID={`service-tile-${s.key}`}
+                />
+              </ServicePermissionGate>
+            );
+          })}
         </View>
 
-        <Text style={styles.footnote}>More services rolling out across Mahindra University soon.</Text>
+        {enabled.length === 0 && items.length === 0 && (
+          <Text style={styles.empty}>No services are enabled for your account yet.</Text>
+        )}
+        {items.length === 0 && enabled.length > 0 && (
+          <Text style={styles.empty}>No matches for “{query}”.</Text>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-
-  header: { paddingHorizontal: H_PAD, paddingTop: 8, paddingBottom: 18 },
-  hi: { fontSize: 16, fontWeight: '600', color: C.muted },
-  heading: { fontSize: 30, fontWeight: '800', color: C.ink, letterSpacing: -0.8, lineHeight: 36, marginTop: 4 },
-
-  search: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    marginHorizontal: H_PAD, backgroundColor: C.field, borderRadius: 16,
-    paddingHorizontal: 16, height: 54, marginBottom: 22,
+  container: { flex: 1, backgroundColor: AB.bg },
+  topBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 24, paddingTop: 8, paddingBottom: 10,
   },
-  searchText: { fontSize: 15, color: C.muted, fontWeight: '500' },
-
-  grid: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    paddingHorizontal: H_PAD, gap: GAP,
+  pageTitle: { fontSize: 32, fontWeight: '700', color: AB.ink, letterSpacing: -0.8 },
+  editBtn: {
+    backgroundColor: AB.field, paddingHorizontal: 16, height: 36,
+    borderRadius: 999, alignItems: 'center', justifyContent: 'center',
   },
-  tile: {
-    backgroundColor: C.white, borderRadius: 24, padding: 16,
-    justifyContent: 'space-between',
-    borderWidth: 1, borderColor: '#EEEFF1',
-    ...SOFT,
-  },
-  tileDim: { opacity: 0.55 },
-  tileLabel: { fontSize: 13.5, fontWeight: '700', color: C.ink, letterSpacing: -0.2 },
-
-  badge: {
-    position: 'absolute', top: 12, right: 12, zIndex: 2,
-    width: 16, height: 16, borderRadius: 8,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  badgeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.red },
-
-  emptyText: { width: '100%', textAlign: 'center', color: C.muted, fontSize: 13, paddingVertical: 16 },
-  footnote: { fontSize: 13, color: C.muted, textAlign: 'center', marginTop: 28, paddingHorizontal: H_PAD },
+  editText: { fontSize: 14, fontWeight: '600', color: AB.ink },
+  scroll: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 48 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  empty: { width: '100%', textAlign: 'center', color: AB.muted, fontSize: 14, paddingVertical: 24 },
 });

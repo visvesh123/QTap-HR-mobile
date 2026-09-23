@@ -76,7 +76,7 @@ export const radii = {
   clayPill: 999,
 };
 
-// Typography — Sora, mapped via global font patch in src/font.ts
+// Typography — Raleway, mapped via global font patch in src/font.ts
 export const typo = {
   display: { fontSize: 34, fontWeight: '800' as const, letterSpacing: -1.0,  color: colors.text },
   h1:      { fontSize: 28, fontWeight: '700' as const, letterSpacing: -0.6,  color: colors.text },
@@ -90,7 +90,7 @@ export const typo = {
   caption: { fontSize: 12, fontWeight: '500' as const, color: colors.textSecondary },
   // Helper font family (use rarely — TextInput needs this explicitly because the
   // global patch doesn't always run before the first render on web).
-  fontFamily: 'Sora-Regular',
+  fontFamily: 'Raleway-Regular',
 };
 
 // Basic legacy shadow (kept so existing files don't break)
