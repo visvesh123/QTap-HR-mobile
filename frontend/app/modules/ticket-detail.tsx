@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  ActivityIndicator, KeyboardAvoidingView, Platform,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,55 +9,37 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { api } from '../../src/api';
 import { colors, radii, spacing, shadow } from '../../src/theme';
 import { ScreenHeader } from '../../src/ui';
-import { showAppAlert } from '../../src/components/AppAlert';
 import { STATUS_COLOR, PRIORITY_COLOR, fmtDateTime } from './tickets';
-
-const CONVERSATION_POLL_MS = 10_000;
 
 export default function TicketDetail() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const ticketId = String(Array.isArray(id) ? id[0] : id || '').trim();
   const [ticket, setTicket] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [reply, setReply] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async (silent = false) => {
-    if (!ticketId) {
-      setTicket(null);
-      setLoading(false);
-      return;
-    }
-    if (!silent) setLoading(true);
-    try {
-      const detail = await api.ticketDetail(ticketId);
-      if (detail) setTicket(detail);
-    } catch {}
-    if (!silent) setLoading(false);
-  }, [ticketId]);
+  const load = useCallback(async () => {
+    try { setTicket(await api.ticketDetail(String(id))); } catch {}
+    setLoading(false);
+  }, [id]);
 
-  useFocusEffect(useCallback(() => {
-    if (!ticketId) return;
-    load(false);
-    const poll = setInterval(() => load(true), CONVERSATION_POLL_MS);
-    return () => clearInterval(poll);
-  }, [ticketId, load]));
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const isClosed = ticket?.status === 'Closed';
 
   const send = async () => {
     if (!reply.trim()) return;
     setBusy(true);
-    try { await api.addTicketComment(ticket.id, reply.trim()); setReply(''); await load(true); }
-    catch (e: any) { showAppAlert({ title: 'Could not send', message: e.message || 'Try again.', variant: 'error' }); }
+    try { await api.addTicketComment(ticket.id, reply.trim()); setReply(''); await load(); }
+    catch (e: any) { Alert.alert('Could not send', e.message || 'Try again.'); }
     finally { setBusy(false); }
   };
 
   const reopen = async () => {
     setBusy(true);
-    try { await api.reopenTicket(ticket.id); await load(true); showAppAlert({ title: 'Reopened', message: 'This ticket has been reopened.', variant: 'success' }); }
-    catch (e: any) { showAppAlert({ title: 'Could not reopen', message: e.message || 'Try again.', variant: 'error' }); }
+    try { await api.reopenTicket(ticket.id); await load(); Alert.alert('Reopened', 'This ticket has been reopened.'); }
+    catch (e: any) { Alert.alert('Could not reopen', e.message || 'Try again.'); }
     finally { setBusy(false); }
   };
 

@@ -6,14 +6,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../../src/api';
-import { colors } from '../../src/theme';
+import { colors, radii, spacing, typo, shadow } from '../../src/theme';
 import { Badge } from '../../src/ui';
-
-/* ───────────── Palette (matches Home / Services / Profile) ───────────── */
-const C = {
-  bg: '#FFFFFF', ink: '#222222', inkSoft: '#3F3F3F', muted: '#717171',
-  field: '#F7F7F7', white: '#FFFFFF', red: '#DC143C', redTint: '#FCEEF1',
-};
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -87,8 +81,8 @@ function AccordionItem({ item, expanded, onToggle }: { item: Item; expanded: boo
         {item.image ? (
           <Image source={{ uri: item.image }} style={styles.thumb} resizeMode="cover" />
         ) : (
-          <View style={styles.iconChip}>
-            <Icon name={meta.icon} size={20} color={C.red} />
+          <View style={[styles.iconChip, { backgroundColor: `${meta.color}1A` }]}>
+            <Icon name={meta.icon} size={18} color={meta.color} />
           </View>
         )}
         <View style={styles.headTextWrap}>
@@ -100,9 +94,7 @@ function AccordionItem({ item, expanded, onToggle }: { item: Item; expanded: boo
             </Text>
           )}
         </View>
-        <View style={styles.chevBox}>
-          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={C.inkSoft} />
-        </View>
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />
       </TouchableOpacity>
 
       {expanded && (
@@ -115,7 +107,7 @@ function AccordionItem({ item, expanded, onToggle }: { item: Item; expanded: boo
             />
           )}
           <View style={styles.metaRow}>
-            <Badge label={item.type.toUpperCase()} color={C.red} />
+            <Badge label={item.type.toUpperCase()} color={meta.color} />
             {!!item.date && (
               <View style={styles.locRow}>
                 <Ionicons name="time-outline" size={13} color={colors.textMuted} />
@@ -165,13 +157,13 @@ export default function Alerts() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Alerts</Text>
-        <Text style={styles.subtitle}>Campus news, events & announcements</Text>
+        <Text style={styles.title}>Alerts & Announcements</Text>
+        <Text style={styles.subtitle}>Tap a headline to read more</Text>
       </View>
 
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.ink} />}
+        contentContainerStyle={{ padding: spacing.md, gap: spacing.sm }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
         {items.map((item) => (
@@ -188,32 +180,32 @@ export default function Alerts() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  header: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8 },
-  title: { fontSize: 26, fontWeight: '700', color: C.ink, letterSpacing: -0.5 },
-  subtitle: { fontSize: 15, color: C.muted, marginTop: 4, fontWeight: '400' },
+  container: { flex: 1, backgroundColor: colors.background },
+  header: { paddingHorizontal: spacing.md, paddingVertical: spacing.md },
+  title: { ...typo.h2, color: colors.text },
+  subtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
 
   card: {
-    backgroundColor: C.white,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#EBEBEB',
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
+    ...shadow.card,
+    overflow: 'hidden',
   },
-  cardExpanded: { paddingBottom: 8 },
+  cardExpanded: { ...shadow.cardHeavy },
   headRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingVertical: 16,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    paddingHorizontal: spacing.md, paddingVertical: 14,
   },
-  iconChip: { width: 52, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.field },
-  thumb: { width: 52, height: 52, borderRadius: 12, backgroundColor: C.field },
-  chevBox: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-  headTextWrap: { flex: 1, gap: 3 },
-  headTitle: { fontSize: 15, fontWeight: '600', color: C.ink },
-  headSnippet: { fontSize: 14, color: C.muted },
+  iconChip: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  thumb: { width: 52, height: 52, borderRadius: 12, backgroundColor: '#FAF7F4' },
+  headTextWrap: { flex: 1, gap: 2 },
+  headTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
+  headSnippet: { fontSize: 12, color: colors.textMuted },
 
-  body: { paddingBottom: 16 },
-  bodyImage: { width: '100%', aspectRatio: 0.78, borderRadius: 12, marginBottom: 12, backgroundColor: C.field },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' },
+  body: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
+  bodyImage: { width: '100%', height: 440, borderRadius: radii.md, marginBottom: spacing.sm, backgroundColor: '#FAF7F4' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: spacing.sm, flexWrap: 'wrap' },
   locRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  metaText: { fontSize: 13, color: C.muted, fontWeight: '500' },
-  bodyText: { fontSize: 15, color: C.inkSoft, lineHeight: 22 },
+  metaText: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
+  bodyText: { fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
 });

@@ -106,9 +106,9 @@ export function WeekStreak({ days }: { days: StreakDay[] }) {
   );
 }
 
-/* -------- Today working time (used on Today tab) -------- */
+/* -------- Today timeline (used on Today tab) -------- */
 export function TodayTimeline({
-  checkIn, checkOut, workSeconds,
+  checkIn, checkOut, workSeconds, expectedStart = '09:30',
 }: { checkIn?: string; checkOut?: string; workSeconds?: number; expectedStart?: string }) {
   // The dalmart `face_recognition_marked_at` is a UTC timestamp. Always render it in
   // IST (Asia/Kolkata) so the timeline matches the campus clock on every device/web.
@@ -129,22 +129,7 @@ export function TodayTimeline({
       });
     } catch { return '—'; }
   };
-
-  const liveSeconds = useMemo(() => {
-    if (workSeconds != null && workSeconds > 0) return workSeconds;
-    const inD = normalize(checkIn);
-    if (!inD) return 0;
-    const outD = normalize(checkOut);
-    const end = outD ?? new Date();
-    return Math.max(0, (end.getTime() - inD.getTime()) / 1000);
-  }, [checkIn, checkOut, workSeconds]);
-
-  const hours = Math.floor(liveSeconds / 3600);
-  const mins = Math.floor((liveSeconds % 3600) / 60);
-  const workLabel = checkIn
-    ? (checkOut ? 'Worked today' : 'Working now')
-    : 'Not started';
-
+  const workH = workSeconds ? (workSeconds / 3600).toFixed(1) : '0.0';
   // Position along the day from 06:00 to 22:00 (16h span), using IST hour-of-day.
   const toPct = (iso?: string) => {
     const d = normalize(iso);
@@ -159,27 +144,22 @@ export function TodayTimeline({
   };
   const inPct = toPct(checkIn);
   const outPct = toPct(checkOut);
-  const nowPct = checkIn && !checkOut ? toPct(new Date().toISOString()) : null;
 
   return (
     <View style={s.timeline}>
-      <View style={s.workHero}>
-        <Text style={s.workLabel}>{workLabel}</Text>
-        <View style={s.workTimeRow}>
-          <Text style={s.workHours}>{hours}</Text>
-          <Text style={s.workUnit}>h</Text>
-          <Text style={[s.workHours, { marginLeft: 6 }]}>{String(mins).padStart(2, '0')}</Text>
-          <Text style={s.workUnit}>m</Text>
-        </View>
+      <View style={s.tlHead}>
+        <Text style={s.tlTitle}>Today&apos;s Timeline</Text>
+        <Text style={s.tlSub}>Expected start {expectedStart} · {workH}h worked</Text>
       </View>
-
       <View style={s.tlTrack}>
+        {/* Hour gridlines */}
         {[6, 9, 12, 15, 18, 21].map((h) => (
           <View key={h} style={[s.tlTick, { left: `${((h - 6) / 16) * 100}%` }]}>
             <View style={s.tlTickLine} />
-            <Text style={s.tlTickLabel}>{h === 12 ? '12p' : h < 12 ? `${h}a` : `${h - 12}p`}</Text>
+            <Text style={s.tlTickLabel}>{h}</Text>
           </View>
         ))}
+        {/* Filled work period */}
         {inPct != null && outPct != null && (
           <View
             style={[
@@ -188,40 +168,35 @@ export function TodayTimeline({
             ]}
           />
         )}
-        {inPct != null && outPct == null && nowPct != null && (
+        {inPct != null && outPct == null && (
           <View
             style={[
               s.tlFillLive,
-              { left: `${inPct}%`, width: `${Math.max(2, nowPct - inPct)}%` },
+              { left: `${inPct}%`, right: '20%' },
             ]}
           />
         )}
+        {/* Check-in marker */}
         {inPct != null && (
           <View style={[s.tlMarker, { left: `${inPct}%`, backgroundColor: '#16A34A' }]}>
             <Ionicons name="log-in-outline" size={12} color="#FFFFFF" />
           </View>
         )}
+        {/* Check-out marker */}
         {outPct != null && (
           <View style={[s.tlMarker, { left: `${outPct}%`, backgroundColor: colors.primary }]}>
             <Ionicons name="log-out-outline" size={12} color="#FFFFFF" />
           </View>
         )}
       </View>
-
       <View style={s.tlRow}>
-        <View style={s.tlChip}>
-          <View style={[s.tlDot, { backgroundColor: '#16A34A' }]} />
-          <View>
-            <Text style={s.tlEvLabel}>In</Text>
-            <Text style={s.tlEvTime}>{fmt(checkIn)}</Text>
-          </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.tlEvLabel}>CHECK-IN</Text>
+          <Text style={s.tlEvTime}>{fmt(checkIn)}</Text>
         </View>
-        <View style={[s.tlChip, { justifyContent: 'flex-end' }]}>
-          <View>
-            <Text style={[s.tlEvLabel, { textAlign: 'right' }]}>Out</Text>
-            <Text style={[s.tlEvTime, { textAlign: 'right' }]}>{fmt(checkOut)}</Text>
-          </View>
-          <View style={[s.tlDot, { backgroundColor: colors.primary }]} />
+        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+          <Text style={s.tlEvLabel}>CHECK-OUT</Text>
+          <Text style={s.tlEvTime}>{fmt(checkOut)}</Text>
         </View>
       </View>
     </View>
@@ -246,22 +221,17 @@ const s = StyleSheet.create({
   dayNum: { fontSize: 11, color: colors.textMuted, fontWeight: '700' },
   dayNum2: { fontSize: 10, color: colors.textMuted, fontWeight: '600' },
 
-  // Timeline / working time
-  timeline: { marginTop: 0 },
-  workHero: { alignItems: 'center', marginBottom: 18 },
-  workLabel: {
-    fontSize: 12, fontWeight: '700', color: colors.textMuted,
-    letterSpacing: 0.6, textTransform: 'uppercase',
-  },
-  workTimeRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 4 },
-  workHours: { fontSize: 40, fontWeight: '800', color: colors.text, letterSpacing: -1.2 },
-  workUnit: { fontSize: 16, fontWeight: '700', color: colors.textSecondary, marginLeft: 2 },
+  // Timeline
+  timeline: { marginTop: spacing.md },
+  tlHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 },
+  tlTitle: { fontSize: 13, fontWeight: '800', color: colors.text, letterSpacing: 0.3 },
+  tlSub: { fontSize: 11, color: colors.textSecondary },
   tlTrack: {
     height: 22,
     backgroundColor: colors.background,
     borderRadius: 11,
     position: 'relative',
-    marginBottom: 28,
+    marginBottom: 26,
   },
   tlTick: { position: 'absolute', top: 0, bottom: 0, alignItems: 'center' },
   tlTickLine: { position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: colors.border },
@@ -282,9 +252,7 @@ const s = StyleSheet.create({
     borderWidth: 3, borderColor: '#FFFFFF',
     ...shadow.card,
   },
-  tlRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  tlChip: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  tlDot: { width: 8, height: 8, borderRadius: 4 },
-  tlEvLabel: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
-  tlEvTime: { fontSize: 17, fontWeight: '800', color: colors.text, marginTop: 1 },
+  tlRow: { flexDirection: 'row', marginTop: 4 },
+  tlEvLabel: { fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 1 },
+  tlEvTime: { fontSize: 16, fontWeight: '800', color: colors.text, marginTop: 2 },
 });

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  ActivityIndicator, KeyboardAvoidingView, Platform, Modal,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,9 +9,6 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { api } from '../../src/api';
 import { colors, radii, spacing, shadow } from '../../src/theme';
 import { ScreenHeader, Empty } from '../../src/ui';
-import { showAppAlert } from '../../src/components/AppAlert';
-import { PermissionGate, useCanAccess } from '../../src/components/PermissionGate';
-import { RBAC } from '../../src/services-catalog';
 
 export const STATUS_COLOR: Record<string, string> = {
   Open: '#3B82F6', 'In Progress': '#F59E0B', Resolved: '#16A34A', Closed: '#6E8493',
@@ -42,28 +39,11 @@ export function timeAgo(iso?: string) {
 
 export default function Tickets() {
   const router = useRouter();
-  const canCreate = useCanAccess(RBAC.CREATE_TICKET);
-  const canView = useCanAccess(RBAC.VIEW_TICKETS);
-  const [tab, setTab] = useState<'raise' | 'my'>(() => (canCreate ? 'raise' : 'my'));
-
-  useEffect(() => {
-    if (tab === 'raise' && !canCreate && canView) setTab('my');
-    if (tab === 'my' && !canView && canCreate) setTab('raise');
-  }, [canCreate, canView, tab]);
-
-  if (!canCreate && !canView) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title="Tickets" subtitle="Raise & track requests" onBack={() => router.back()} />
-        <Empty icon="ticket-outline" message="You don't have permission to use ticketing." />
-      </SafeAreaView>
-    );
-  }
+  const [tab, setTab] = useState<'raise' | 'my'>('raise');
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader title="Tickets" subtitle="Raise & track requests" onBack={() => router.back()} />
-      {(canCreate && canView) && (
       <View style={styles.segment}>
         {(['raise', 'my'] as const).map((t) => (
           <TouchableOpacity
@@ -84,17 +64,8 @@ export default function Tickets() {
           </TouchableOpacity>
         ))}
       </View>
-      )}
 
-      {canCreate && (canView ? tab === 'raise' : true) ? (
-        <PermissionGate permission={RBAC.CREATE_TICKET}>
-          <RaiseForm onCreated={() => canView && setTab('my')} />
-        </PermissionGate>
-      ) : (
-        <PermissionGate permission={RBAC.VIEW_TICKETS}>
-          <MyTickets router={router} />
-        </PermissionGate>
-      )}
+      {tab === 'raise' ? <RaiseForm onCreated={() => setTab('my')} /> : <MyTickets router={router} />}
     </SafeAreaView>
   );
 }
@@ -102,46 +73,32 @@ export default function Tickets() {
 // ---------------- Raise a Ticket ----------------
 function RaiseForm({ onCreated }: { onCreated: () => void }) {
   const [profile, setProfile] = useState<any>(null);
-  const [deptId, setDeptId] = useState('');
+  const [dept, setDept] = useState('');
   const [deptOpen, setDeptOpen] = useState(false);
-  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const selectedDept = departments.find((d) => d.id === deptId);
-
   useEffect(() => {
     (async () => {
       try { setProfile(await api.ticketLookup()); } catch {}
-      try {
-        const depts = await api.ticketDepartments();
-        const normalized = (depts || []).map((d: any) =>
-          typeof d === 'string' ? { id: d, name: d } : { id: String(d.id), name: d.name },
-        );
-        setDepartments(normalized);
-      } catch {}
+      try { setDepartments(await api.ticketDepartments()); } catch {}
     })();
   }, []);
 
   const create = async () => {
-    if (!deptId) { showAppAlert({ title: 'Department required', message: 'Please select a department.', variant: 'warning' }); return; }
-    if (!subject.trim()) { showAppAlert({ title: 'Subject required', message: 'Please enter a subject.', variant: 'warning' }); return; }
-    if (!description.trim()) { showAppAlert({ title: 'Description required', message: 'Please describe your issue.', variant: 'warning' }); return; }
+    if (!dept) { Alert.alert('Department required', 'Please select a department.'); return; }
+    if (!subject.trim()) { Alert.alert('Subject required', 'Please enter a subject.'); return; }
+    if (!description.trim()) { Alert.alert('Description required', 'Please describe your issue.'); return; }
     setSubmitting(true);
     try {
-      await api.createTicket({
-        subject: subject.trim(),
-        description: description.trim(),
-        department: selectedDept?.name || deptId,
-        department_id: deptId,
-        requester: profile,
-      });
-      setSubject(''); setDescription(''); setDeptId('');
-      showAppAlert({ title: 'Ticket created', message: 'Your ticket has been raised successfully.', variant: 'success' });
+      await api.createTicket({ subject: subject.trim(), description: description.trim(), department: dept, requester: profile });
+      setSubject(''); setDescription(''); setDept('');
+      Alert.alert('Ticket created', 'Your ticket has been raised successfully.');
       onCreated();
     } catch (e: any) {
-      showAppAlert({ title: 'Could not create', message: e.message || 'Please try again.', variant: 'error' });
+      Alert.alert('Could not create', e.message || 'Please try again.');
     } finally { setSubmitting(false); }
   };
 
@@ -178,8 +135,8 @@ function RaiseForm({ onCreated }: { onCreated: () => void }) {
         <Text style={styles.label}>Department</Text>
         <TouchableOpacity style={styles.input} onPress={() => setDeptOpen(true)} activeOpacity={0.8} testID="ticket-dept-select">
           <MaterialCommunityIcons name="office-building-outline" size={16} color={colors.textMuted} />
-          <Text style={[styles.inputText, { color: selectedDept ? colors.text : colors.textMuted }]}>
-            {selectedDept?.name || 'Select department'}
+          <Text style={[styles.inputText, { color: dept ? colors.text : colors.textMuted }]}>
+            {dept || 'Select department'}
           </Text>
           <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
         </TouchableOpacity>
@@ -227,7 +184,7 @@ function RaiseForm({ onCreated }: { onCreated: () => void }) {
 
         {/* Actions */}
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.cancelBtn} onPress={() => { setSubject(''); setDescription(''); setDeptId(''); }} activeOpacity={0.85} testID="ticket-cancel-btn">
+          <TouchableOpacity style={styles.cancelBtn} onPress={() => { setSubject(''); setDescription(''); setDept(''); }} activeOpacity={0.85} testID="ticket-cancel-btn">
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.createBtn, submitting && { opacity: 0.7 }]} onPress={create} disabled={submitting} activeOpacity={0.9} testID="ticket-create-btn">
@@ -249,14 +206,14 @@ function RaiseForm({ onCreated }: { onCreated: () => void }) {
             <ScrollView style={{ maxHeight: 340 }}>
               {departments.map((d) => (
                 <TouchableOpacity
-                  key={d.id}
+                  key={d}
                   style={styles.modalRow}
-                  onPress={() => { setDeptId(d.id); setDeptOpen(false); }}
+                  onPress={() => { setDept(d); setDeptOpen(false); }}
                   activeOpacity={0.7}
-                  testID={`dept-option-${d.name}`}
+                  testID={`dept-option-${d}`}
                 >
-                  <Text style={[styles.modalRowText, deptId === d.id && { color: colors.primary, fontWeight: '800' }]}>{d.name}</Text>
-                  {deptId === d.id && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+                  <Text style={[styles.modalRowText, dept === d && { color: colors.primary, fontWeight: '800' }]}>{d}</Text>
+                  {dept === d && <Ionicons name="checkmark" size={18} color={colors.primary} />}
                 </TouchableOpacity>
               ))}
             </ScrollView>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, radii, shadow, spacing, typo } from './theme';
 
@@ -61,9 +62,16 @@ export const PrimaryButton = ({
     disabled={disabled || loading}
     onPress={onPress}
     testID={testID}
-    style={[styles.primaryBtn, { opacity: disabled ? 0.5 : 1 }, style]}
+    style={[{ borderRadius: radii.lg, overflow: 'hidden', opacity: disabled ? 0.5 : 1 }, style]}
   >
-    <Text style={styles.primaryBtnText}>{loading ? 'Please wait…' : label}</Text>
+    <LinearGradient
+      colors={[colors.primaryDark, colors.primaryLight]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.primaryBtn}
+    >
+      <Text style={styles.primaryBtnText}>{loading ? 'Please wait…' : label}</Text>
+    </LinearGradient>
   </TouchableOpacity>
 );
 
@@ -159,20 +167,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: 8,
   },
   primaryBtnText: {
     color: colors.white,
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 16,
+    letterSpacing: 0.3,
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: radii.lg,
     padding: spacing.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    ...shadow.card,
   },
   pill: {
     paddingHorizontal: spacing.md,
@@ -209,19 +215,18 @@ const styles = StyleSheet.create({
   screenHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    backgroundColor: colors.white,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#EBEBEB',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   backBtn: {
     padding: spacing.xs,
     marginRight: spacing.xs,
   },
   screenTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...typo.h3,
     color: colors.text,
   },
   screenSubtitle: {

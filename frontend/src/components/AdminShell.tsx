@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
   useWindowDimensions, Platform,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -82,7 +82,13 @@ export function AdminShell({
       <View style={styles.sidebar}>
         <View>
           <View style={styles.brand}>
-            <Image source={BRAND.logo} style={styles.brandLogoImg} resizeMode="contain" />
+            <View style={styles.brandLogo}>
+              <Text style={styles.brandLogoText}>MU</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.brandTitle} numberOfLines={1}>{BRAND.name}</Text>
+              <Text style={styles.brandSub}>HR · WORKFORCE</Text>
+            </View>
           </View>
         </View>
 
@@ -278,7 +284,6 @@ const styles = StyleSheet.create({
     borderRightWidth: 1, borderRightColor: SB_BORDER,
   },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 22, borderBottomWidth: 1, borderBottomColor: SB_BORDER },
-  brandLogoImg: { width: 148, height: 62 },
   brandLogo: {
     width: 40, height: 40, borderRadius: 8,
     backgroundColor: colors.white,

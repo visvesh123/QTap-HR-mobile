@@ -1,28 +1,30 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
-  RefreshControl, Platform,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ImageBackground, RefreshControl } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/auth';
 import { api } from '../../src/api';
-import { daysUntil } from '../../src/timeago';
-import { useCanAccess } from '../../src/components/PermissionGate';
-import { RBAC } from '../../src/services-catalog';
-import {
-  AB, SearchPill, CategoryStrip, ListingCard, SectionHead, MapFab,
-  type CategoryTab,
-} from '../../src/components/ExploreUI';
+import { colors, radii, spacing, BRAND, clay } from '../../src/theme';
+import { Card } from '../../src/ui';
+import { timeAgo, daysUntil } from '../../src/timeago';
+import MessLiveCard from '../../src/components/MessLiveCard';
 
-const CATEGORIES: CategoryTab[] = [
-  { key: 'For You', label: 'For you', icon: 'sparkles-outline' },
-  { key: 'Academics', label: 'Academics', icon: 'school-outline' },
-  { key: 'Campus Life', label: 'Life', icon: 'people-outline' },
-  { key: 'Services', label: 'Services', icon: 'grid-outline' },
-];
-type Cat = (typeof CATEGORIES)[number]['key'];
+const CAMPUS_IMG = 'https://customer-assets.emergentagent.com/job_6e34b5bc-d1ea-497f-9b38-6e61f8c9d982/artifacts/08bgdgj4_image.png';
+
+function weatherIconForCode(code: number | null): keyof typeof MaterialCommunityIcons.glyphMap {
+  if (code == null) return 'weather-partly-cloudy';
+  if (code === 0) return 'weather-sunny';
+  if ([1, 2].includes(code)) return 'weather-partly-cloudy';
+  if (code === 3) return 'weather-cloudy';
+  if ([45, 48].includes(code)) return 'weather-fog';
+  if ([51, 53, 55, 56, 57].includes(code)) return 'weather-partly-rainy';
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return 'weather-pouring';
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return 'weather-snowy';
+  if ([95, 96, 99].includes(code)) return 'weather-lightning-rainy';
+  return 'weather-partly-cloudy';
+}
 
 function weatherAdvisory(code: number | null, hour: number, temp: number | null): { emoji: string; text: string } {
   const night = hour >= 19 || hour < 6;
@@ -40,256 +42,382 @@ function weatherAdvisory(code: number | null, hour: number, temp: number | null)
   return { emoji: '🌤️', text: 'Pleasant on campus today.' };
 }
 
-interface Feature {
-  key: string; cat: Exclude<Cat, 'For You'>; title: string; sub: string;
-  meta: string; image: string | number; route: string; rating: string; badge?: string;
-}
-
-const FEATURES: Feature[] = [
-  { key: 'exams', cat: 'Academics', title: 'Examinations', sub: 'Hall ticket, schedule & results', meta: 'Academics · Open now', route: '/modules/examinations', image: 'https://images.pexels.com/photos/256431/pexels-photo-256431.jpeg?auto=compress&cs=tinysrgb&w=900', rating: '4.9', badge: 'Campus pick' },
-  { key: 'library', cat: 'Academics', title: 'Central Library', sub: 'Search, issue & RFID pass', meta: 'Academics · 2 min walk', route: '/modules/library', image: 'https://images.unsplash.com/photo-1521587760476-6c12a4b040da?w=900', rating: '4.8' },
-  { key: 'events', cat: 'Campus Life', title: 'Events & Clubs', sub: 'TechFest, cultural nights & more', meta: 'Campus Life · This week', route: '/modules/events', image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=900', rating: '4.7', badge: 'Guest favourite' },
-  { key: 'hostel', cat: 'Campus Life', title: 'Hostel', sub: 'Allotment, roommates & complaints', meta: 'Campus Life · Resident services', route: '/modules/hostel', image: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=900', rating: '4.6' },
-  { key: 'mess', cat: 'Campus Life', title: 'Mess & Dining', sub: 'Menus, occupancy & live wait', meta: 'Campus Life · Serving now', route: '/modules/mess', image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=900', rating: '4.5' },
-  { key: 'gate', cat: 'Services', title: 'Gate Pass', sub: 'Personal RFID / QR entry pass', meta: 'Services · Instant access', route: '/modules/gate', image: 'https://images.unsplash.com/photo-1562774053-701939374585?w=900', rating: '4.9' },
-  { key: 'parcel', cat: 'Services', title: 'Parcels', sub: 'Inbox, pickup & collect', meta: 'Services · Campus mail', route: '/modules/parcel', image: 'https://images.unsplash.com/photo-1607344645866-009c320b63e0?w=900', rating: '4.4' },
-  { key: 'map', cat: 'Services', title: 'Campus Map', sub: 'Buildings, hostels & shortcuts', meta: 'Services · Explore campus', route: '/modules/map', image: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=900', rating: '4.8' },
-];
-
 export default function Home() {
   const router = useRouter();
   const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
-  const [events, setEvents] = useState<any[]>([]);
-  const [holidays, setHolidays] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
   const [weather, setWeather] = useState<any>(null);
-  const [cat, setCat] = useState<Cat>('For You');
-  const [query, setQuery] = useState('');
+  const [holiday, setHoliday] = useState<any>(null);
+  const [news, setNews] = useState<any[]>([]);
 
   const load = async () => {
-    try { setEvents(await api.events()); } catch {}
-    try { const h = await api.holidays(); setHolidays((h.upcoming || []).slice(0, 3)); } catch {}
     try { setWeather(await api.weather()); } catch {}
+    try { const h = await api.holidays(); setHoliday(h.upcoming?.[0] || null); } catch {}
+    try { setNews(await api.news()); } catch {}
+    if (user?.role === 'admin') {
+      try { setStats(await api.adminDashboard()); } catch {}
+    }
   };
+
   useEffect(() => { load(); }, [user]);
 
-  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
-
-  const canHallTicket = useCanAccess(RBAC.VIEW_HALL_TICKET);
-  const canAdminDash = useCanAccess(RBAC.VIEW_ADMIN_DASHBOARD);
-  const canCheckIn = useCanAccess(RBAC.CHECK_IN);
-  const canViewAttendance = useCanAccess(RBAC.VIEW_ATTENDANCE);
-
-  const roleListing: Feature | null = (() => {
-    if (!user) return null;
-    if (user.role === 'student' && canHallTicket) {
-      return {
-        key: 'hero', cat: 'Academics', title: 'Hall Ticket',
-        sub: 'Released · tap to view your card', meta: 'Mid-Sem Exams · For you',
-        route: '/modules/examinations',
-        image: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=900',
-        rating: 'New', badge: 'For you',
-      } as Feature;
-    }
-    if (user.role === 'admin' && canAdminDash) {
-      return {
-        key: 'hero', cat: 'Services', title: 'HR Portal',
-        sub: 'Live attendance, staff & analytics', meta: 'University · Admin',
-        route: '/admin',
-        image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=900',
-        rating: 'Live', badge: 'For you',
-      } as Feature;
-    }
-    if (canCheckIn || canViewAttendance) {
-      return {
-        key: 'hero', cat: 'Services', title: 'Mark Attendance',
-        sub: 'Geo + face check-in / check-out', meta: (user.department || 'Faculty') + ' · For you',
-        route: '/modules/attendance',
-        image: require('../../assets/images/attendance-hero.png') as number,
-        rating: 'Open', badge: 'For you',
-      } as Feature;
-    }
-    return null;
-  })();
-
-  const list = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const base = cat === 'For You'
-      ? (roleListing ? [roleListing, ...FEATURES.filter((f) => f.key !== 'exams' || !roleListing)] : FEATURES)
-      : FEATURES.filter((f) => f.cat === cat);
-    if (!q) return base;
-    return base.filter((f) =>
-      `${f.title} ${f.sub} ${f.meta}`.toLowerCase().includes(q),
-    );
-  }, [cat, query, roleListing]);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
 
   if (!user) return null;
 
+  const now = new Date();
+  const hour = now.getHours();
+  const timeWord = hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening';
   const HONORIFICS = ['dr', 'dr.', 'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.', 'prof', 'prof.', 'mx', 'mx.'];
   const nameParts = user.name.split(' ').filter(Boolean);
   const firstName = user.role === 'admin'
-    ? 'Admin'
+    ? 'Administrator'
     : (HONORIFICS.includes((nameParts[0] || '').toLowerCase()) ? (nameParts[1] || nameParts[0]) : nameParts[0]);
-  const initials = (firstName?.[0] || 'U').toUpperCase();
+  const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-  const now = new Date();
-  const hour = now.getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const temp: number | null = weather?.temp_c ?? null;
-  const code: number | null = weather?.code ?? null;
-  const advisory = weatherAdvisory(code, hour, temp);
+  const advisory = weatherAdvisory(weather?.code ?? null, hour, weather?.temp_c ?? null);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.top}>
-        <SearchPill
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Start your search"
-          subtitle="Services · Events · Hostel"
-          testID="home-search"
-        />
-        <CategoryStrip
-          tabs={CATEGORIES}
-          active={cat}
-          onChange={(k) => setCat(k as Cat)}
-          testIDPrefix="cat"
-        />
-      </View>
-
       <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={AB.ink} />}
+        contentContainerStyle={{ paddingBottom: spacing.xxl }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
-        <View style={styles.helloRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.hello}>{greeting}, {firstName}</Text>
-            <Text style={styles.helloSub} numberOfLines={1}>
-              {advisory.emoji} {advisory.text}
-              {temp != null ? ` · ${Math.round(temp)}°C` : ''}
-            </Text>
+        {/* Top bar — MUOne brand + weather (above the photo) */}
+        <View style={styles.topBar}>
+          <View style={styles.brandRow}>
+            <Image source={{ uri: BRAND.logoUrl }} style={styles.barLogo} resizeMode="contain" />
+            <Text style={styles.wmMU}>MU<Text style={styles.wmOne}>One</Text></Text>
           </View>
-          <TouchableOpacity style={styles.avatar} onPress={() => router.push('/(tabs)/profile')} testID="home-avatar">
-            {user.avatar
-              ? <Image source={{ uri: user.avatar }} style={styles.avatarImg} />
-              : <Text style={styles.avatarText}>{initials}</Text>}
-          </TouchableOpacity>
+          {weather && weather.temp_c != null && (
+            <View style={styles.tempChip} testID="weather-chip">
+              <MaterialCommunityIcons name={weatherIconForCode(weather.code)} size={20} color={colors.primary} />
+              <Text style={styles.tempVal}>{weather.temp_c}°</Text>
+              <Text style={styles.tempHL}>H:{weather.high_c ?? '—'}°  L:{weather.low_c ?? '—'}°</Text>
+            </View>
+          )}
         </View>
 
-        {list.map((f) => (
-          <ListingCard
-            key={f.key}
-            image={f.image}
-            title={f.title}
-            subtitle={f.sub}
-            meta={f.meta}
-            rating={f.rating}
-            badge={f.badge}
-            onPress={() => router.push(f.route as any)}
-            testID={f.key === 'hero' ? 'hero-cta' : `feat-${f.key}`}
-            likeTestID={f.key === 'hero' ? 'hero-like' : undefined}
-          />
-        ))}
-
-        {list.length === 0 && (
-          <Text style={styles.empty}>No matches for “{query}”.</Text>
-        )}
-
-        {events.length > 0 && (
-          <>
-            <SectionHead title="Upcoming events" action="Show all" onAction={() => router.push('/modules/events')} />
-            {events.map((e) => (
-              <ListingCard
-                key={e.id}
-                image={e.image}
-                title={e.title}
-                subtitle={`${formatDate(e.date)} · ${e.venue}`}
-                meta={`${e.registered} going`}
-                rating="Event"
-                badge="This week"
-                onPress={() => router.push('/modules/events')}
-                testID={`event-${e.id}`}
-              />
-            ))}
-          </>
-        )}
-
-        {holidays.length > 0 && (
-          <>
-            <SectionHead title="Upcoming holidays" />
-            <View style={styles.holidayWrap}>
-              {holidays.map((h) => {
-                const d = daysUntil(h.date);
-                const countdown = d <= 0 ? 'Today' : d === 1 ? 'Tomorrow' : `in ${d} days`;
-                const dt = new Date(`${h.date}T00:00:00`);
-                return (
-                  <View key={h.name} style={styles.holidayRow} testID={`holiday-${h.name}`}>
-                    <View style={styles.holidayDate}>
-                      <Text style={styles.holidayDay}>{dt.getDate()}</Text>
-                      <Text style={styles.holidayMon}>{dt.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.holidayName} numberOfLines={1}>{h.name}</Text>
-                      <Text style={styles.holidayType} numberOfLines={1}>{h.type} · {countdown}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={AB.muted} />
-                  </View>
-                );
-              })}
+        {/* Campus weather hero */}
+        <ImageBackground source={{ uri: CAMPUS_IMG }} style={styles.hero} imageStyle={styles.heroImg}>
+          <LinearGradient
+            colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.85)']}
+            style={styles.heroOverlay}
+          >
+            <View style={styles.heroBottom}>
+              <Text style={styles.heroDate}>{dateStr}</Text>
+              <Text style={styles.heroGreet}>Good <Text style={styles.heroGreetAccent}>{timeWord}</Text>, {firstName}!</Text>
+              <View style={styles.heroWeatherRow}>
+                <Text style={styles.advisoryEmoji}>{advisory.emoji}</Text>
+                <Text style={styles.heroWeather}>{advisory.text}</Text>
+              </View>
             </View>
-          </>
+          </LinearGradient>
+        </ImageBackground>
+
+        {/* Role action card (moved down from the banner) */}
+        <View style={styles.actionWrap}>
+          {user.role === 'student' && (
+            <Card style={styles.actionCard} testID="welcome-card">
+              <View style={{ flex: 1 }}>
+                <Text style={styles.actionKicker}>Mid-Sem Exams</Text>
+                <Text style={styles.actionTitle}>Hall Ticket Released</Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/modules/examinations')}
+                  style={styles.actionBtn}
+                  testID="open-hallticket-btn"
+                >
+                  <Text style={styles.actionBtnText}>View Hall Ticket</Text>
+                  <Ionicons name="arrow-forward" size={16} color={colors.white} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.actionImg}>
+                <MaterialCommunityIcons name="ticket-confirmation" size={56} color={colors.primary} />
+              </View>
+            </Card>
+          )}
+
+          {user.role === 'staff' && (
+            <Card style={styles.actionCard} testID="welcome-card">
+              <View style={{ flex: 1 }}>
+                <Text style={styles.actionKicker}>{user.department}</Text>
+                <Text style={styles.actionTitle}>Mark Your Attendance</Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/modules/attendance')}
+                  style={styles.actionBtn}
+                  testID="open-attendance-btn"
+                >
+                  <Text style={styles.actionBtnText}>Check-in Now</Text>
+                  <Ionicons name="arrow-forward" size={16} color={colors.white} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.actionImg}>
+                <MaterialCommunityIcons name="map-marker-account" size={56} color={colors.primary} />
+              </View>
+            </Card>
+          )}
+
+          {user.role === 'admin' && stats && (
+            <Card style={styles.actionCard} testID="welcome-card">
+              <View style={{ flex: 1 }}>
+                <Text style={styles.actionKicker}>University Snapshot</Text>
+                <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: 8 }}>
+                  <Stat label="Students" value={stats.total_students} />
+                  <Stat label="Staff" value={stats.total_staff} />
+                  <Stat label="Visitors" value={stats.total_visitors} />
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: spacing.md }}>
+                  <TouchableOpacity
+                    onPress={() => router.push('/admin')}
+                    style={styles.actionBtn}
+                    testID="open-web-portal"
+                  >
+                    <MaterialCommunityIcons name="monitor-dashboard" size={16} color={colors.white} />
+                    <Text style={styles.actionBtnText}>Open HR Portal</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => router.push('/modules/admin')}
+                    style={[styles.actionBtn, { backgroundColor: colors.clayDark }]}
+                    testID="open-admin-btn"
+                  >
+                    <Text style={styles.actionBtnText}>Mobile Console</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </Card>
+          )}
+        </View>
+
+        {/* Mess live capacity */}
+        <MessLiveCard />
+
+        {/* Upcoming holiday countdown */}
+        {holiday && (() => {
+          const d = daysUntil(holiday.date);
+          const countdown = d <= 0 ? 'Today' : d === 1 ? 'Tomorrow' : `in ${d} days`;
+          const dt = new Date(`${holiday.date}T00:00:00`);
+          return (
+            <View
+              style={styles.holidayCard}
+              testID="holiday-card"
+            >
+              <View style={styles.holidayDate}>
+                <Text style={styles.holidayDay}>{dt.getDate()}</Text>
+                <Text style={styles.holidayMon}>{dt.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.holidayKicker}>NEXT HOLIDAY</Text>
+                <Text style={styles.holidayName} numberOfLines={1}>{holiday.name}</Text>
+                <Text style={styles.holidayType}>{holiday.type}</Text>
+              </View>
+              <View style={styles.holidayPill}>
+                <MaterialCommunityIcons name="calendar-clock" size={14} color={colors.primary} />
+                <Text style={styles.holidayPillText}>{countdown}</Text>
+              </View>
+            </View>
+          );
+        })()}
+
+        {/* Latest campus news */}
+        {news.length > 0 && (
+          <View style={styles.newsSection}>
+            <View style={styles.sectionRow}>
+              <View>
+                <Text style={styles.sectionTitle}>Latest News</Text>
+                <Text style={styles.sectionSub}>Happenings around campus</Text>
+              </View>
+              <TouchableOpacity onPress={() => router.push('/modules/news')} testID="news-see-all">
+                <Text style={styles.seeAll}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.newsScroll}
+            >
+              {news.map((n) => (
+                <TouchableOpacity
+                  key={n.id}
+                  style={styles.newsCard}
+                  activeOpacity={0.9}
+                  onPress={() => router.push('/modules/news')}
+                  testID={`news-${n.id}`}
+                >
+                  <Image source={{ uri: n.image }} style={styles.newsImg} />
+                  <View style={styles.newsBody}>
+                    <View style={styles.newsCatBadge}>
+                      <Text style={styles.newsCatText}>{n.category}</Text>
+                    </View>
+                    <Text style={styles.newsTitle} numberOfLines={2}>{n.title}</Text>
+                    <Text style={styles.newsTime}>{timeAgo(n.date)}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
         )}
       </ScrollView>
-
-      <MapFab onPress={() => router.push('/modules/map')} />
     </SafeAreaView>
   );
 }
 
-function formatDate(d: string) {
-  try {
-    return new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  } catch { return d; }
-}
+const Stat = ({ label, value, color }: { label: string; value: any; color?: string }) => (
+  <View>
+    <Text style={[styles.statValue, color ? { color } : null]}>{value ?? '—'}</Text>
+    <Text style={styles.statLabel}>{label}</Text>
+  </View>
+);
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: AB.bg },
-  top: {
-    backgroundColor: AB.bg,
-    ...Platform.select({
-      web: { boxShadow: '0 1px 0 rgba(0,0,0,0.04)' } as any,
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.06,
-        shadowRadius: 2,
-        elevation: 2,
-      },
-    }),
-    zIndex: 2,
-  },
-  scroll: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 120 },
-  helloRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 22, gap: 12 },
-  hello: { fontSize: 22, fontWeight: '700', color: AB.ink, letterSpacing: -0.4 },
-  helloSub: { fontSize: 14, color: AB.muted, marginTop: 4, fontWeight: '400' },
-  avatar: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: AB.red,
-    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-  },
-  avatarImg: { width: '100%', height: '100%' },
-  avatarText: { color: AB.white, fontSize: 15, fontWeight: '700' },
-  empty: { textAlign: 'center', color: AB.muted, fontSize: 15, paddingVertical: 40 },
+  container: { flex: 1, backgroundColor: colors.clayBg },
 
-  holidayWrap: { gap: 0, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: AB.line },
-  holidayRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: AB.line,
+  hero: {
+    width: '100%',
+    aspectRatio: 1120 / 1062,
+    justifyContent: 'flex-end',
+    backgroundColor: colors.clayDark,
   },
-  holidayDate: { width: 48, alignItems: 'center' },
-  holidayDay: { fontSize: 20, fontWeight: '700', color: AB.ink, lineHeight: 24 },
-  holidayMon: { fontSize: 11, fontWeight: '600', color: AB.muted, letterSpacing: 0.6, marginTop: 2 },
-  holidayName: { fontSize: 15, fontWeight: '600', color: AB.ink },
-  holidayType: { fontSize: 14, color: AB.muted, marginTop: 2 },
+  heroImg: { borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  heroOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+    borderBottomLeftRadius: 28, borderBottomRightRadius: 28,
+  },
+  topBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: spacing.md, paddingVertical: 12,
+    backgroundColor: colors.white,
+  },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  barLogo: { width: 26, height: 26 },
+  tempChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 4,
+  },
+  tempVal: { fontSize: 18, fontWeight: '800', color: colors.clayDark },
+  tempHL: { fontSize: 11, fontWeight: '600', color: colors.clayMuted },
+  advisoryEmoji: { fontSize: 15, marginTop: 1 },
+  wmMU: { fontSize: 20, fontWeight: '900', color: colors.primary, letterSpacing: -0.3 },
+  wmOne: { fontSize: 20, fontWeight: '800', color: colors.clayDark, letterSpacing: -0.3 },
+
+  heroBottom: { gap: 4 },
+  heroDate: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.9)' },
+  heroGreet: { fontSize: 32, fontWeight: '900', color: colors.white, letterSpacing: -0.5 },
+  heroGreetAccent: { color: colors.white },
+  heroWeatherRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginTop: 4 },
+  heroWeather: { flex: 1, fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.92)', lineHeight: 20 },
+
+  quickRow: {
+    flexDirection: 'row', justifyContent: 'space-around',
+    marginTop: -spacing.lg, marginHorizontal: spacing.md,
+    backgroundColor: colors.white, borderRadius: radii.clay, padding: spacing.md,
+    ...(clay.surface as any),
+  },
+  quickItem: { alignItems: 'center', gap: 6, flex: 1 },
+  quickIcon: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: colors.clayPink,
+    alignItems: 'center', justifyContent: 'center',
+    ...(clay.surfaceSoft as any),
+  },
+  quickLabel: { fontSize: 11, fontWeight: '700', color: colors.clayDark },
+
+  actionWrap: { marginTop: spacing.md, marginHorizontal: spacing.md },
+  actionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.white,
+    borderRadius: radii.clay,
+    ...(clay.surface as any),
+  },
+  actionKicker: { fontSize: 11, fontWeight: '800', color: colors.gold, letterSpacing: 1.4 },
+  actionTitle: { fontSize: 20, fontWeight: '800', color: colors.clayDark, marginTop: 4, lineHeight: 24 },
+  actionBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 11,
+    borderRadius: 999, alignSelf: 'flex-start', marginTop: spacing.sm, gap: 6,
+    ...(clay.crimson as any),
+  },
+  actionBtnText: { color: colors.white, fontSize: 13, fontWeight: '800' },
+  actionImg: {
+    width: 88, height: 88, borderRadius: radii.clay,
+    backgroundColor: colors.clayPeach,
+    alignItems: 'center', justifyContent: 'center',
+    ...(clay.surfaceSoft as any),
+  },
+  statValue: { fontSize: 22, fontWeight: '800', color: colors.text },
+  statLabel: { fontSize: 11, color: colors.textSecondary, marginTop: -2 },
+
+  holidayCard: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    marginTop: spacing.md, marginHorizontal: spacing.md,
+    backgroundColor: colors.white, borderRadius: radii.clay, padding: spacing.md,
+    ...(clay.surface as any),
+  },
+  holidayDate: {
+    width: 56, height: 56, borderRadius: 16,
+    backgroundColor: colors.clayPeach, alignItems: 'center', justifyContent: 'center',
+  },
+  holidayDay: { fontSize: 22, fontWeight: '900', color: colors.primary, lineHeight: 24 },
+  holidayMon: { fontSize: 10, fontWeight: '800', color: colors.primary, letterSpacing: 1 },
+  holidayKicker: { fontSize: 10, fontWeight: '800', color: colors.gold, letterSpacing: 1.4 },
+  holidayName: { fontSize: 17, fontWeight: '800', color: colors.clayDark, marginTop: 2 },
+  holidayType: { fontSize: 12, color: colors.clayMuted, marginTop: 1 },
+  holidayPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: colors.clayPink, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999,
+  },
+  holidayPillText: { fontSize: 12, fontWeight: '800', color: colors.primary },
+
+  newsSection: { marginTop: spacing.lg },
+  sectionRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: spacing.md, marginBottom: spacing.sm,
+  },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: colors.clayDark },
+  sectionSub: { fontSize: 12, color: colors.clayMuted, marginTop: 1 },
+  seeAll: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  newsScroll: { paddingHorizontal: spacing.md, gap: spacing.sm },
+  newsCard: {
+    width: 250, backgroundColor: colors.white, borderRadius: radii.clay,
+    overflow: 'hidden', ...(clay.surface as any),
+  },
+  newsImg: { width: '100%', height: 130, backgroundColor: colors.clayPeach },
+  newsBody: { padding: spacing.md },
+  newsCatBadge: {
+    alignSelf: 'flex-start', backgroundColor: colors.clayPink,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, marginBottom: 6,
+  },
+  newsCatText: { fontSize: 10, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 },
+  newsTitle: { fontSize: 14, fontWeight: '700', color: colors.clayDark, lineHeight: 19 },
+  newsTime: { fontSize: 11, color: colors.clayMuted, marginTop: 6 },
+
+  promoWrap: {
+    marginTop: spacing.lg, marginHorizontal: spacing.md,
+    borderRadius: radii.clay, overflow: 'hidden', height: 130,
+    ...(clay.surface as any),
+  },
+  promoImg: { width: '100%', height: '100%', position: 'absolute' },
+  promoOverlay: { flex: 1, padding: spacing.md, justifyContent: 'flex-end' },
+  promoKicker: { fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.9)', letterSpacing: 1.5 },
+  promoTitle: { fontSize: 18, fontWeight: '800', color: colors.white, marginTop: 2 },
+  promoBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: colors.white, paddingHorizontal: 14, paddingVertical: 7,
+    borderRadius: 999, alignSelf: 'flex-start', marginTop: 8,
+  },
+  promoBtnText: { fontSize: 12, fontWeight: '800', color: colors.primary },
+  grid: {
+    flexDirection: 'row', flexWrap: 'wrap',
+    paddingHorizontal: spacing.md, gap: spacing.sm,
+  },
 });

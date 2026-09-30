@@ -7,7 +7,6 @@ import { Text, View, ActivityIndicator } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { AuthProvider } from '../src/auth';
-import { AppAlertProvider } from '../src/components/AppAlert';
 import { applyGlobalFontPatch } from '../src/font';
 import { colors } from '../src/theme';
 
@@ -15,11 +14,11 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    'Raleway-Regular':    require('../assets/fonts/Raleway-Regular.ttf'),
-    'Raleway-Medium':     require('../assets/fonts/Raleway-Medium.ttf'),
-    'Raleway-SemiBold':   require('../assets/fonts/Raleway-SemiBold.ttf'),
-    'Raleway-Bold':       require('../assets/fonts/Raleway-Bold.ttf'),
-    'Raleway-ExtraBold':  require('../assets/fonts/Raleway-ExtraBold.ttf'),
+    'Sora-Regular':    require('../assets/fonts/Sora-Regular.ttf'),
+    'Sora-Medium':     require('../assets/fonts/Sora-Medium.ttf'),
+    'Sora-SemiBold':   require('../assets/fonts/Sora-SemiBold.ttf'),
+    'Sora-Bold':       require('../assets/fonts/Sora-Bold.ttf'),
+    'Sora-ExtraBold':  require('../assets/fonts/Sora-ExtraBold.ttf'),
   });
 
   useEffect(() => {
@@ -41,7 +40,6 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <AppAlertProvider>
           <StatusBar style="dark" />
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
             <Stack.Screen name="index" />
@@ -50,7 +48,6 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="modules" />
           </Stack>
-          </AppAlertProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

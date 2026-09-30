@@ -76,7 +76,7 @@ export const radii = {
   clayPill: 999,
 };
 
-// Typography — Raleway, mapped via global font patch in src/font.ts
+// Typography — Sora, mapped via global font patch in src/font.ts
 export const typo = {
   display: { fontSize: 34, fontWeight: '800' as const, letterSpacing: -1.0,  color: colors.text },
   h1:      { fontSize: 28, fontWeight: '700' as const, letterSpacing: -0.6,  color: colors.text },
@@ -90,7 +90,7 @@ export const typo = {
   caption: { fontSize: 12, fontWeight: '500' as const, color: colors.textSecondary },
   // Helper font family (use rarely — TextInput needs this explicitly because the
   // global patch doesn't always run before the first render on web).
-  fontFamily: 'Raleway-Regular',
+  fontFamily: 'Sora-Regular',
 };
 
 // Basic legacy shadow (kept so existing files don't break)
@@ -207,15 +207,12 @@ export const clay = {
   }),
 };
 
-// Branding — MUOne lockup (logo + "Connected by One.")
+// Branding
 export const BRAND = {
-  name: 'MUOne',
+  name: 'Mahindra University',
   short: 'MU',
-  tagline: 'Connected by One.',
+  tagline: 'Rise. Lead. Inspire.',
   domain: 'mahindrauniversity.edu.in',
-  /** Full logo unit: MUone wordmark + caption */
-  logo: require('../assets/images/muone-logo.png') as number,
-  /** @deprecated Prefer BRAND.logo — kept for any remote/fallback consumers */
   logoUrl: 'https://customer-assets.emergentagent.com/job_campus-hub-453/artifacts/79azl2xu_mu_logo%20%281%29.png',
   poweredBy: 'Q-Tap',
   poweredByLogoUrl: 'https://customer-assets.emergentagent.com/job_campus-hub-453/artifacts/6viavqwc_Q-Tap_logo.jpg',

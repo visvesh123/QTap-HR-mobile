@@ -41,7 +41,7 @@ const K = {
   ticketReads: 'mock_ticket_reads',
 };
 
-// ---------- mock identities ----------
+// ---------- mock identities (used for role-based access later) ----------
 const VENUE = [{ venue_id: 2, venue_name: 'ECSOE Building', latitude: 17.5685454, longitude: 78.4354396, accuracy: null, radius: 100 }];
 
 const STAFF_USER = {
@@ -50,92 +50,12 @@ const STAFF_USER = {
   student_id: null, employee_id: 'MUCS2722', avatar: null, phone: '9059721442',
   qid: 'QT208195', gender: 'Male', type: 'Staff', designated_locations: VENUE,
 };
-const ROLE_PERMISSIONS: Record<'student' | 'staff' | 'admin', string[]> = {
-  student: [
-    'VIEW_HALL_TICKET_MOBILE_BUTTON',
-    'VIEW_EXAMINATIONS_MOBILE_PAGE',
-    'VIEW_MESS_MENU_MOBILE_PAGE',
-    'MESS_LIVE_MOBILE_WIDGET',
-    'APPLY_LEAVE_MOBILE_BUTTON',
-    'VIEW_LEAVE_MOBILE_PAGE',
-    'VIEW_HOLIDAY_MOBILE_WIDGET',
-    'VIEW_CAMPUS_NEWS_MOBILE_WIDGET',
-    'TICKET.CREATE_TICKETING_MOBILE_SCREEN',
-    'TICKETS.VIEW_TICKETING_MOBILE_SCREEN',
-  ],
-  staff: [
-    'CHECK_IN.CREATE_MARK_ATTENDANCE_MOBILE_SCREEN',
-    'CHECK_OUT.CREATE_MARK_ATTENDANCE_MOBILE_SCREEN',
-    'TIMELINE.VIEW_MARK_ATTENDANCE_MOBILE_SCREEN',
-    'LOCATIONS.VIEW_MARK_ATTENDANCE_MOBILE_SCREEN',
-    'HISTORY.VIEW_MARK_ATTENDANCE_MOBILE_SCREEN',
-    'STATS.VIEW_MARK_ATTENDANCE_MOBILE_SCREEN',
-    'GEO_VALIDATE_MOBILE_BUTTON',
-    'FACE_VALIDATE_MOBILE_BUTTON',
-    'VIEW_ATTENDANCE_MOBILE_PAGE',
-    'VIEW_MESS_MENU_MOBILE_PAGE',
-    'MESS_LIVE_MOBILE_WIDGET',
-    'CREATE_VISITOR_MOBILE_BUTTON',
-    'VIEW_VISITOR_MOBILE_PAGE',
-    'APPLY_LEAVE_MOBILE_BUTTON',
-    'VIEW_LEAVE_MOBILE_PAGE',
-    'VIEW_HOLIDAY_MOBILE_WIDGET',
-    'VIEW_CAMPUS_NEWS_MOBILE_WIDGET',
-    'TICKET.CREATE_TICKETING_MOBILE_SCREEN',
-    'TICKETS.VIEW_TICKETING_MOBILE_SCREEN',
-  ],
-  admin: [
-    'VIEW_ADMIN_DASHBOARD_MOBILE',
-    'OPEN_HR_PORTAL_MOBILE_BUTTON',
-    'OPEN_ADMIN_CONSOLE_MOBILE_BUTTON',
-    'VIEW_HALL_TICKET_MOBILE_BUTTON',
-    'VIEW_EXAMINATIONS_MOBILE_PAGE',
-    'VIEW_MESS_MENU_MOBILE_PAGE',
-    'MESS_LIVE_MOBILE_WIDGET',
-    'CREATE_VISITOR_MOBILE_BUTTON',
-    'APPROVE_VISITOR_MOBILE_BUTTON',
-    'VIEW_VISITOR_MOBILE_PAGE',
-    'CHECK_IN.CREATE_MARK_ATTENDANCE_MOBILE_SCREEN',
-    'CHECK_OUT.CREATE_MARK_ATTENDANCE_MOBILE_SCREEN',
-    'TIMELINE.VIEW_MARK_ATTENDANCE_MOBILE_SCREEN',
-    'LOCATIONS.VIEW_MARK_ATTENDANCE_MOBILE_SCREEN',
-    'HISTORY.VIEW_MARK_ATTENDANCE_MOBILE_SCREEN',
-    'STATS.VIEW_MARK_ATTENDANCE_MOBILE_SCREEN',
-    'GEO_VALIDATE_MOBILE_BUTTON',
-    'FACE_VALIDATE_MOBILE_BUTTON',
-    'VIEW_ATTENDANCE_MOBILE_PAGE',
-    'APPLY_LEAVE_MOBILE_BUTTON',
-    'APPROVE_LEAVE_HR_ADMIN_MOBILE_BUTTON',
-    'VIEW_LEAVE_MOBILE_PAGE',
-    'VIEW_HOLIDAY_MOBILE_WIDGET',
-    'VIEW_CAMPUS_NEWS_MOBILE_WIDGET',
-    'TICKET.CREATE_TICKETING_MOBILE_SCREEN',
-    'TICKETS.VIEW_TICKETING_MOBILE_SCREEN',
-  ],
-};
 
-function permissionsForUser(user: any): string[] {
-  const role = String(user?.role || '').toLowerCase();
-  const base =
-    role === 'admin'
-      ? ROLE_PERMISSIONS.admin
-      : role === 'student'
-        ? ROLE_PERMISSIONS.student
-        : ROLE_PERMISSIONS.staff;
-  const withDepartment = [...base];
-  if (role === 'staff' && String(user?.department || '').toLowerCase() === 'security') {
-    withDepartment.push('VIEW_GATE_LOGS_MOBILE_PAGE');
-  }
-  return Array.from(new Set(withDepartment));
-}
-
-function withPermissions<T extends Record<string, any>>(user: T): T & { permissions: string[] } {
-  return { ...user, permissions: permissionsForUser(user) };
-}
-
-// Single sign-in identity.
+// Single sign-in identity. Access is governed by this user's `role` (RBAC) — there
+// are intentionally NO multiple/role-switching logins; the real role will arrive
+// from your backend later and drive feature gating.
 function currentMockUser(overrides: any = {}): any {
-  return withPermissions({ ...clone(STAFF_USER), ...overrides });
+  return { ...clone(STAFF_USER), ...overrides };
 }
 
 // ---------- static datasets (captured from the original API) ----------
@@ -176,42 +96,14 @@ const LEAVE_BALANCES = [
   { type: 'Earned', total: 18, used: 0, remaining: 18 },
 ];
 
-const MESS_MEALS = [
-  { key: 'breakfast', label: 'Breakfast', hours: '7:30 – 9:30 AM', icon: 'coffee-outline' },
-  { key: 'lunch', label: 'Lunch', hours: '12:30 – 2:30 PM', icon: 'food-variant' },
-  { key: 'snacks', label: 'Snacks', hours: '5:00 – 6:30 PM', icon: 'cookie-outline' },
-  { key: 'dinner', label: 'Dinner', hours: '7:30 – 9:30 PM', icon: 'food-turkey' },
-];
-
-const MESS_MENU: Record<string, string[]> = {
-  breakfast: ['Idli & Sambar', 'Mini Dosa', 'Boiled Eggs', 'Upma', 'Seasonal Fruits', 'Tea / Coffee'],
-  lunch: ['Veg Biryani', 'Dal Tadka', 'Aloo Gobi', 'Curd Rice', 'Salad', 'Gulab Jamun'],
-  snacks: ['Veg Puff', 'Samosa', 'Bhel Puri', 'Masala Chai'],
-  dinner: ['Roti', 'Paneer Butter Masala', 'Jeera Rice', 'Mixed Veg', 'Vanilla Ice Cream'],
-};
-
 const MESS = {
-  meals: MESS_MEALS,
-  menu: MESS_MENU,
+  meal: 'lunch', next_meal: 'snacks', server_time: nowIso(),
   messes: [
-    { id: 'mess_it', name: 'IT Mess', location: 'Behind IT Block, Phase-1', capacity: 280,
-      occupancy: { breakfast: 44, lunch: 56, snacks: 28, dinner: 47 } },
-    { id: 'mess_dorms', name: 'Dorms Mess', location: 'Boys Hostel Complex, Block-C', capacity: 420,
-      occupancy: { breakfast: 62, lunch: 86, snacks: 41, dinner: 71 } },
-    { id: 'mess_phase2', name: 'Phase-2 Mess', location: 'Girls Hostel Complex, Phase-2', capacity: 320,
-      occupancy: { breakfast: 51, lunch: 67, snacks: 35, dinner: 58 } },
+    { id: 'mess_it', name: 'IT Mess', location: 'Behind IT Block, Phase-1', capacity: 280, distance_m: 120, hours: { breakfast: '7:30 - 9:30 AM', lunch: '12:30 - 2:30 PM', snacks: '5:00 - 6:30 PM', dinner: '7:30 - 9:30 PM' }, menu: { breakfast: ['Idli & Sambar', 'Mini Dosa', 'Boiled Eggs', 'Upma', 'Tea / Coffee'], lunch: ['Veg Biryani', 'Dal Tadka', 'Aloo Gobi', 'Curd Rice', 'Salad', 'Gulab Jamun'], snacks: ['Veg Puff', 'Masala Chai', 'Bhel Puri'], dinner: ['Roti', 'Paneer Butter Masala', 'Jeera Rice', 'Mixed Veg', 'Ice Cream'] }, current: 153, occupancy_pct: 54.6, current_meal: 'lunch', next_meal: 'snacks', display_meal: 'lunch', today_menu: ['Veg Biryani', 'Dal Tadka', 'Aloo Gobi', 'Curd Rice', 'Salad', 'Gulab Jamun'], next_meal_hours: '5:00 - 6:30 PM', status: { label: 'Comfortable', color: '#22C55E', tone: 'good' }, wait_minutes: 0, updated_at: nowIso(), recommended: true },
+    { id: 'mess_dorms', name: 'Dorms Mess', location: 'Boys Hostel Complex, Block-C', capacity: 420, distance_m: 380, hours: { breakfast: '7:00 - 9:30 AM', lunch: '12:30 - 2:30 PM', snacks: '5:00 - 6:30 PM', dinner: '7:30 - 10:00 PM' }, menu: { breakfast: ['Aloo Paratha', 'Poha', 'Omelette', 'Cornflakes & Milk', 'Tea / Coffee'], lunch: ['Chicken Curry', 'Veg Pulao', 'Dal Makhani', 'Mixed Veg', 'Roti', 'Pickle'], snacks: ['Samosa', 'Vada Pav', 'Filter Coffee'], dinner: ['Butter Roti', 'Egg Curry', 'Steamed Rice', 'Bhindi Fry', 'Sweet Lassi'] }, current: 292, occupancy_pct: 69.5, current_meal: 'lunch', next_meal: 'snacks', display_meal: 'lunch', today_menu: ['Chicken Curry', 'Veg Pulao', 'Dal Makhani', 'Mixed Veg', 'Roti', 'Pickle'], next_meal_hours: '5:00 - 6:30 PM', status: { label: 'Crowded', color: '#F59E0B', tone: 'warn' }, wait_minutes: 2, updated_at: nowIso(), recommended: false },
+    { id: 'mess_phase2', name: 'Phase-2 Mess', location: 'Girls Hostel Complex, Phase-2', capacity: 320, distance_m: 540, hours: { breakfast: '7:30 - 9:30 AM', lunch: '12:30 - 2:30 PM', snacks: '5:00 - 6:30 PM', dinner: '7:30 - 9:30 PM' }, menu: { breakfast: ['Masala Dosa', 'Pongal', 'Boiled Eggs', 'Fruits', 'Tea / Coffee'], lunch: ['Hyderabadi Biryani', 'Dal Fry', 'Bhindi Masala', 'Raita', 'Salad', 'Kheer'], snacks: ['Pav Bhaji', 'Cold Coffee', 'Cookies'], dinner: ['Tandoori Roti', 'Veg Kofta', 'Steamed Rice', 'Aloo Methi', 'Gulab Jamun'] }, current: 193, occupancy_pct: 60.3, current_meal: 'lunch', next_meal: 'snacks', display_meal: 'lunch', today_menu: ['Hyderabadi Biryani', 'Dal Fry', 'Bhindi Masala', 'Raita', 'Salad', 'Kheer'], next_meal_hours: '5:00 - 6:30 PM', status: { label: 'Crowded', color: '#F59E0B', tone: 'warn' }, wait_minutes: 2, updated_at: nowIso(), recommended: false },
   ],
 };
-
-function messCurrentMeal(): string | null {
-  const d = new Date();
-  const h = d.getHours() + d.getMinutes() / 60;
-  if (h >= 7 && h < 9.75) return 'breakfast';
-  if (h >= 11.5 && h < 14.75) return 'lunch';
-  if (h >= 16.75 && h < 18.75) return 'snacks';
-  if (h >= 19.25 && h < 21.75) return 'dinner';
-  return null;
-}
 
 const EVENTS = [
   { id: 'evt1', title: 'TechFest 2026', category: 'Tech', date: '2026-03-15', venue: 'Main Auditorium', image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600', description: 'Annual technology festival with hackathons, workshops, and guest speakers from industry leaders.', organizer: 'Computer Science Club', registered: 247 },
@@ -358,36 +250,23 @@ async function getTickets(): Promise<any[]> {
 
 // ---------- the mock API (mirrors src/api.ts `api`) ----------
 export const mockApi = {
-  // auth — successful login/OTP returns a permissions array.
+  // auth — single sign-in identity; role drives RBAC.
   login: async (email: string, _password: string, _role?: string) => {
-    await delay();
-    const user = currentMockUser(email ? { email } : {});
-    await setStore(K.user, user);
-    return { token: `mock-token-${user.id}`, user, permissions: user.permissions };
+    await delay(); const user = currentMockUser(email ? { email } : {}); await setStore(K.user, user);
+    return { token: `mock-token-${user.id}`, user };
   },
   otpRequest: async (phone: string) => {
     await delay(); return { ok: true, phone, demo_otp: '123456', message: 'OTP sent (demo: 123456)' };
   },
   otpVerify: async (phone: string, _code: string) => {
-    await delay();
-    const user = currentMockUser({ phone });
-    await setStore(K.user, user);
-    return { token: `mock-token-${user.id}`, user, permissions: user.permissions };
+    await delay(); const user = currentMockUser({ phone }); await setStore(K.user, user);
+    return { token: `mock-token-${user.id}`, user };
   },
   microsoft: async (_email?: string) => {
-    await delay();
-    const user = currentMockUser();
-    await setStore(K.user, user);
-    return { token: `mock-token-${user.id}`, user, permissions: user.permissions };
+    await delay(); const user = currentMockUser(); await setStore(K.user, user);
+    return { token: `mock-token-${user.id}`, user };
   },
-  me: async (): Promise<any> => {
-    await delay(60);
-    const stored = await getStore<any>(K.user, currentMockUser());
-    if (Array.isArray(stored?.permissions) && stored.permissions.length > 0) return stored;
-    const user = withPermissions(stored);
-    await setStore(K.user, user);
-    return user;
-  },
+  me: async (): Promise<any> => { await delay(60); return getStore(K.user, currentMockUser()); },
   demoAccounts: async () => { await delay(); return []; },
 
   // exams
@@ -409,7 +288,6 @@ export const mockApi = {
   attendanceToday: async () => { await delay(); return { date: todayKey(), check_in: null, check_out: null, events: [], work_seconds: 0, status: 'absent' }; },
   attendanceStats: async () => { await delay(); return buildStats(); },
   attendanceGeofences: async () => { await delay(); return clone(GEOFENCES); },
-  authorizedLocations: async () => { await delay(); return clone(VENUE); },
   geoValidate: async (_lat: number, _long: number, _status: 'IN' | 'OUT') => {
     await delay(); return { success: true, message: null, venue_id: 2, venue_name: 'ECSOE Building', attendance_id: null, current_state: 'PENDING_FACE' };
   },
@@ -436,52 +314,6 @@ export const mockApi = {
       work_seconds = Math.max(0, Math.floor((new Date(t.check_out_at).getTime() - new Date(t.check_in_at).getTime()) / 1000));
     }
     return { date: todayKey(), check_in_at: t.check_in_at, check_out_at: t.check_out_at, venue: t.venue, work_seconds, events: t.events };
-  },
-  attendanceStatus: async () => {
-    await delay();
-    const t = await mockApi.timelineToday();
-    const base = {
-      geo_validation: false,
-      face_recognition: false,
-      geo_marked_at: null as string | null,
-      face_recognition_marked_at: null as string | null,
-      last_activity: null as string | null,
-      mode: null as string | null,
-      attendance_id: null as number | null,
-      roster_assignment_id: null as number | null,
-      venue_id: null as number | null,
-      reason: null as string | null,
-      previous_session_auto_closed: false,
-    };
-    if (t.check_in_at && t.check_out_at) {
-      return {
-        ...base,
-        current_state: 'CHECKED_OUT',
-        current_status: 'OUT' as const,
-        geo_validation: true,
-        face_recognition: true,
-        geo_marked_at: t.check_in_at,
-        face_recognition_marked_at: t.check_out_at,
-        last_activity: t.check_out_at,
-      };
-    }
-    if (t.check_in_at) {
-      return {
-        ...base,
-        current_state: 'CHECKED_IN',
-        current_status: 'IN' as const,
-        geo_validation: true,
-        face_recognition: true,
-        geo_marked_at: t.check_in_at,
-        face_recognition_marked_at: t.check_in_at,
-        last_activity: t.check_in_at,
-      };
-    }
-    return {
-      ...base,
-      current_state: 'NO_RECORD',
-      current_status: null,
-    };
   },
   attendanceAdminToday: async () => {
     await delay();
@@ -568,7 +400,7 @@ export const mockApi = {
   adminMonthlyReport: async (_month?: string) => { await delay(); return { month: 'June 2026', rows: [] }; },
 
   // mess
-  messList: async (_demo?: string) => { await delay(); return { ...clone(MESS), current_meal: messCurrentMeal(), server_time: nowIso() }; },
+  messList: async (_demo?: string) => { await delay(); return { ...clone(MESS), server_time: nowIso() }; },
 
   // weather
   weather: async () => { await delay(); return clone(WEATHER); },
@@ -589,10 +421,7 @@ export const mockApi = {
   news: async () => { await delay(); return clone(NEWS); },
 
   // tickets
-  ticketDepartments: async () => {
-    await delay(60);
-    return TICKET_DEPARTMENTS.map((name, i) => ({ id: String(i + 1), name }));
-  },
+  ticketDepartments: async () => { await delay(60); return clone(TICKET_DEPARTMENTS); },
   ticketLookup: async (studentId?: string) => {
     await delay(450);
     const u = await getStore<any>(K.user, currentMockUser());
@@ -617,32 +446,32 @@ export const mockApi = {
     const list = await getTickets();
     const t = list.find((x) => x.id === id || x.ticket_no === id) || null;
     if (t) {
+      // Opening a ticket marks it read up to its latest update.
       const reads = await getStore<Record<string, string>>(K.ticketReads, {});
       reads[t.id] = nowIso();
       await setStore(K.ticketReads, reads);
     }
     return t;
   },
-  createTicket: async (payload: { subject: string; description: string; department?: string; department_id?: string; requester?: any }) => {
+  createTicket: async (payload: { subject: string; description: string; department: string; requester?: any }) => {
     await delay();
     const list = await getTickets();
     const maxNo = list.reduce((m, t) => Math.max(m, parseInt(String(t.ticket_no).replace(/\D/g, '')) || 0), 0);
     const no = maxNo + 1;
     const now = nowIso().slice(0, 19);
-    const deptName = payload.department || payload.department_id || 'General';
     const rec = {
       id: `tkt_${no}`,
       ticket_no: `TKT-${String(no).padStart(5, '0')}`,
       subject: payload.subject,
       description: payload.description,
-      department: deptName,
+      department: payload.department,
       status: 'Open',
       priority: null,
       channel: 'Portal',
       requester: payload.requester || null,
       created_at: now,
       updated_at: now,
-      journey: [deptName, 'Open'],
+      journey: [payload.department, 'Open'],
       messages: [{ id: 'm1', author: 'You', author_type: 'requester', text: payload.description, at: now }],
       activity: [{ id: 'a1', type: 'created', label: 'Ticket created', at: now }],
     };
